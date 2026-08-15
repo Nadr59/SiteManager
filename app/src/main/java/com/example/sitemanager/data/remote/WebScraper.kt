@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -144,6 +145,6 @@ class WebScraper @Inject constructor() {
     }
 
     private fun extractDomain(url: String): String = try {
-        java.net.URL(url).host.removePrefix("www.")
+        URL(url).host.removePrefix("www.")
     } catch (_: Exception) { url.take(50) }
 }
