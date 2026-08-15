@@ -1,6 +1,10 @@
 package com.nadr59.sitemanager.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,12 +24,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,7 +48,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -65,17 +71,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
-import androidx.compose.material.icons.filled.Share
-
+// ═══════════════════════════════════════════════════════════
+// ═══ الشاشة الرئيسية للتحليل ═══
+// ═══════════════════════════════════════════════════════════
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalysisScreen(
@@ -126,14 +124,9 @@ fun AnalysisScreen(
                     return@launch
                 }
 
-                // محاولة التخزين المؤقت
                 if (!forceRefresh) {
-                    val cached = withContext(Dispatchers.IO) {
-                        repo.getCachedAnalysis(siteId)
-                    }
-                    val stale = withContext(Dispatchers.IO) {
-                        repo.isAnalysisStale(siteId)
-                    }
+                    val cached = withContext(Dispatchers.IO) { repo.getCachedAnalysis(siteId) }
+                    val stale = withContext(Dispatchers.IO) { repo.isAnalysisStale(siteId) }
                     if (cached != null && !stale) {
                         result = cached
                         isFromCache = true
@@ -143,12 +136,10 @@ fun AnalysisScreen(
                 }
 
                 loadingStep = "جارٍ جمع محتوى الموقع..."
-                kotlinx.coroutines.delay(300)
+                withContext(Dispatchers.IO) { kotlinx.coroutines.delay(300) }
                 loadingStep = "جارٍ التحليل بالذكاء الاصطناعي..."
 
-                val res = withContext(Dispatchers.IO) {
-                    repo.analyze(siteId, config)
-                }
+                val res = withContext(Dispatchers.IO) { repo.analyze(siteId, config) }
 
                 res.fold(
                     onSuccess = {
@@ -157,9 +148,7 @@ fun AnalysisScreen(
                         error = null
                     },
                     onFailure = { e ->
-                        val fallback = withContext(Dispatchers.IO) {
-                            repo.getCachedAnalysis(siteId)
-                        }
+                        val fallback = withContext(Dispatchers.IO) { repo.getCachedAnalysis(siteId) }
                         if (fallback != null) {
                             result = fallback
                             isFromCache = true
@@ -176,7 +165,6 @@ fun AnalysisScreen(
         }
     }
 
-    // بدء التحليل عند فتح الشاشة
     LaunchedEffect(siteId) {
         startAnalysis(forceRefresh = false)
     }
@@ -200,34 +188,34 @@ fun AnalysisScreen(
                     }
                 },
                 actions = {
-    IconButton(onClick = {
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, buildString {
-                appendLine("📊 تحليل: $siteName")
-                appendLine("🔗 $siteUrl")
-                result?.let { r ->
-                    if (r.rating > 0f) appendLine("⭐ ${String.format("%.1f", r.rating)}/10")
-                    if (r.overview.isNotBlank()) appendLine("\n${r.overview.take(300)}")
-                }
-                appendLine("\n— تم التحليل عبر مدير المواقع")
-            })
-            putExtra(Intent.EXTRA_SUBJECT, "تحليل: $siteName")
-        }
-        context.startActivity(Intent.createChooser(shareIntent, "مشاركة التحليل"))
-    }) {
-        Icon(Icons.Filled.Share, contentDescription = "مشاركة")
-    }
+                    // زر مشاركة
+                    IconButton(onClick = {
+                        val shareText = buildString {
+                            appendLine("تقرير تحليل: $siteName")
+                            appendLine("الرابط: $siteUrl")
+                            result?.let { r ->
+                                if (r.rating > 0f) {
+                                    appendLine("التقييم: ${String.format("%.1f", r.rating)} / 10")
+                                }
+                                if (r.overview.isNotBlank()) {
+                                    appendLine("")
+                                    appendLine(r.overview.take(300))
+                                }
+                            }
+                            appendLine("")
+                            appendLine("— تم التحليل عبر مدير المواقع")
+                        }
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                            putExtra(Intent.EXTRA_SUBJECT, "تحليل: $siteName")
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "مشاركة"))
+                    }) {
+                        Icon(Icons.Filled.Share, contentDescription = "مشاركة")
+                    }
 
-    // زر تحديث
-    IconButton(
-        onClick = { startAnalysis(forceRefresh = true) },
-        enabled = !isLoading
-    ) {
-        Icon(Icons.Filled.Refresh, contentDescription = "تحديث")
-    }
-}
-                    
+                    // زر تحديث
                     IconButton(
                         onClick = { startAnalysis(forceRefresh = true) },
                         enabled = !isLoading
@@ -244,73 +232,89 @@ fun AnalysisScreen(
                 .padding(padding)
         ) {
             when {
-                isLoading -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(48.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 4.dp
-                        )
-                        Spacer(Modifier.height(20.dp))
-                        Text(loadingStep, fontWeight = FontWeight.Medium, fontSize = 16.sp)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "قد يستغرق هذا بعض الوقت...",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                error != null && result == null -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(32.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            Icons.Outlined.ErrorOutline,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Text("حدث خطأ", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            error ?: "",
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(24.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = onBack) { Text("رجوع") }
-                            Button(onClick = { startAnalysis(forceRefresh = true) }) {
-                                Text("إعادة المحاولة")
-                            }
-                        }
-                    }
-                }
-
-                result != null -> {
-                    AnalysisResultContent(
-                        result = result!!,
-                        isFromCache = isFromCache,
-                        warning = error
-                    )
-                }
+                isLoading -> LoadingView(loadingStep)
+                error != null && result == null -> ErrorView(
+                    error = error!!,
+                    onRetry = { startAnalysis(forceRefresh = true) },
+                    onBack = onBack
+                )
+                result != null -> AnalysisResultContent(
+                    result = result!!,
+                    isFromCache = isFromCache,
+                    warning = error
+                )
             }
         }
     }
 }
 
-// ═══ عدّل دالة AnalysisResultContent ل接收 context ═══
+// ═══════════════════════════════════════════════════════════
+// ═══ شاشة التحميل ═══
+// ═══════════════════════════════════════════════════════════
+@Composable
+private fun LoadingView(step: String) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp),
+            color = MaterialTheme.colorScheme.primary,
+            strokeWidth = 4.dp
+        )
+        Spacer(Modifier.height(20.dp))
+        Text(step, fontWeight = FontWeight.Medium, fontSize = 16.sp)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "قد يستغرق هذا بعض الوقت...",
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ═══ شاشة الخطأ ═══
+// ═══════════════════════════════════════════════════════════
+@Composable
+private fun ErrorView(
+    error: String,
+    onRetry: () -> Unit,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            Icons.Outlined.ErrorOutline,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.error
+        )
+        Spacer(Modifier.height(16.dp))
+        Text("حدث خطأ", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            error,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(24.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onBack) { Text("رجوع") }
+            Button(onClick = onRetry) { Text("إعادة المحاولة") }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ═══ محتوى النتائج ═══
+// ═══════════════════════════════════════════════════════════
 @Composable
 private fun AnalysisResultContent(
     result: AnalysisResult,
@@ -318,16 +322,12 @@ private fun AnalysisResultContent(
     warning: String?
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
 
-    // ═══ دالة نسخ النص الكامل ═══
     fun copyFullText() {
         val text = buildString {
             appendLine("═".repeat(50))
             appendLine("تقرير تحليل الموقع")
             appendLine("═".repeat(50))
-
             if (result.rating > 0f) {
                 appendLine("\n⭐ التقييم: ${String.format("%.1f", result.rating)} / 10")
             }
@@ -363,9 +363,8 @@ private fun AnalysisResultContent(
                 appendLine("\n⚠️ نقاط الضعف:")
                 result.prosAndCons.cons.forEach { appendLine("  • $it") }
             }
-            appendLine("\n═".repeat(50))
+            appendLine("\n" + "═".repeat(50))
         }
-
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("analysis", text))
         Toast.makeText(context, "تم نسخ النص الكامل", Toast.LENGTH_SHORT).show()
@@ -381,16 +380,12 @@ private fun AnalysisResultContent(
                 onClick = { copyFullText() },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             ) {
-                Icon(
-                    Icons.Filled.ContentCopy,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(Icons.Filled.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("نسخ النص الكامل", fontWeight = FontWeight.Bold)
             }
@@ -424,6 +419,116 @@ private fun AnalysisResultContent(
             }
         }
 
+        // ═══ التقييم ═══
+        if (result.rating > 0f) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            String.format("%.1f", result.rating),
+                            fontSize = 40.sp,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(" / 10", fontSize = 20.sp, fontWeight = FontWeight.Light)
+                        Spacer(Modifier.width(16.dp))
+                        Text(
+                            when {
+                                result.rating >= 8f -> "ممتاز"
+                                result.rating >= 6f -> "جيد"
+                                result.rating >= 4f -> "مقبول"
+                                else -> "يحتاج تحسين"
+                            },
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+
+        // ═══ الأقسام ═══
+        if (result.overview.isNotBlank()) {
+            item { AnalysisSectionCard("نظرة عامة", result.overview) }
+        }
+        if (result.purpose.isNotBlank()) {
+            item { AnalysisSectionCard("الغرض والهدف", result.purpose) }
+        }
+        if (result.features.isNotEmpty()) {
+            item { AnalysisBulletCard("الميزات", result.features, Color(0xFF5BD9A8)) }
+        }
+        if (result.techStack.isNotEmpty()) {
+            item { AnalysisBulletCard("التقنيات", result.techStack, Color(0xFF5B8DD9)) }
+        }
+        if (result.howToUse.isNotBlank()) {
+            item { AnalysisSectionCard("كيفية البدء", result.howToUse) }
+        }
+        if (result.examples.isNotBlank()) {
+            item { AnalysisCodeCard("أمثلة", result.examples) }
+        }
+        if (result.prosAndCons.pros.isNotEmpty()) {
+            item { AnalysisBulletCard("نقاط القوة", result.prosAndCons.pros, Color(0xFF4CAF50)) }
+        }
+        if (result.prosAndCons.cons.isNotEmpty()) {
+            item { AnalysisBulletCard("نقاط الضعف", result.prosAndCons.cons, Color(0xFFFF9800)) }
+        }
+
+        // ═══ النص الكامل القابل للتوسيع ═══
+        if (result.rawMarkdown.isNotBlank()) {
+            item {
+                var expanded by remember { mutableStateOf(false) }
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { expanded = !expanded },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("النص الكامل", fontWeight = FontWeight.Bold)
+                            Icon(
+                                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                contentDescription = null
+                            )
+                        }
+                        AnimatedVisibility(visible = expanded) {
+                            Text(
+                                result.rawMarkdown,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 12.dp),
+                                lineHeight = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item { Spacer(Modifier.height(32.dp)) }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ═══ بطاقة قسم عادي ═══
+// ═══════════════════════════════════════════════════════════
 @Composable
 private fun AnalysisSectionCard(title: String, content: String) {
     Card(
@@ -443,6 +548,9 @@ private fun AnalysisSectionCard(title: String, content: String) {
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+// ═══ بطاقة قائمة نقاط ═══
+// ═══════════════════════════════════════════════════════════
 @Composable
 private fun AnalysisBulletCard(title: String, items: List<String>, accent: Color) {
     Card(
@@ -467,7 +575,9 @@ private fun AnalysisBulletCard(title: String, items: List<String>, accent: Color
                     Surface(
                         shape = CircleShape,
                         color = accent.copy(alpha = 0.15f),
-                        modifier = Modifier.padding(top = 8.dp).size(8.dp)
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .size(8.dp)
                     ) {}
                     Text(item, fontSize = 14.sp, lineHeight = 22.sp)
                 }
@@ -476,6 +586,9 @@ private fun AnalysisBulletCard(title: String, items: List<String>, accent: Color
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+// ═══ بطاقة كود ═══
+// ═══════════════════════════════════════════════════════════
 @Composable
 private fun AnalysisCodeCard(title: String, code: String) {
     Card(
