@@ -64,19 +64,43 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     viewModel: SiteViewModel,
+    sharedUrl: String?,                    // ← جديد
+    onSharedUrlConsumed: () -> Unit,       // ← جديد
     onNavigateToAdd: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToAnalysis: (Int, String, String) -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var siteToDelete by remember { mutableStateOf<SiteEntity?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }  // ← جديد
+
+    // ═══ معالجة الرابط المُشارك ═══
+    LaunchedEffect(sharedUrl) {
+        if (!sharedUrl.isNullOrBlank()) {
+            val result = snackbarHostState.showSnackbar(
+                message = "تم استلام رابط: ${sharedUrl.take(50)}...",
+                actionLabel = "إضافة",
+                duration = androidx.compose.material3.SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                onNavigateToAdd()
+            }
+            onSharedUrlConsumed()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },  // ← جديد
         topBar = {
             TopAppBar(
                 title = {
