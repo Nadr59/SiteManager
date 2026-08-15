@@ -1,11 +1,17 @@
-package com.example.sitemanager.data.local
+package com.nadr59.sitemanager.data.local
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [SiteEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [SiteEntity::class],
+    version = 2,  // رفع الإصدار من 1 إلى 2
+    exportSchema = false
+)
 abstract class SiteDatabase : RoomDatabase() {
 
     abstract fun siteDao(): SiteDao
@@ -14,13 +20,28 @@ abstract class SiteDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: SiteDatabase? = null
 
+        // ═══ Migration: إضافة أعمدة التحليل ═══
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE sites ADD COLUMN siteType TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE sites ADD COLUMN lastAnalyzed INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE sites ADD COLUMN cachedOverview TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE sites ADD COLUMN cachedTechStack TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE sites ADD COLUMN cachedFeatures TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE sites ADD COLUMN aiRating REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE sites ADD COLUMN analysisCount INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): SiteDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     SiteDatabase::class.java,
                     "site_manager_db"
-                ).build()
+                )
+                .addMigrations(MIGRATION_1_2)
+                .build()
                 INSTANCE = instance
                 instance
             }
