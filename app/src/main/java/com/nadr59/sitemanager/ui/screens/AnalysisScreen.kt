@@ -65,6 +65,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalysisScreen(
@@ -271,16 +281,93 @@ fun AnalysisScreen(
     }
 }
 
+// ═══ عدّل دالة AnalysisResultContent ل接收 context ═══
 @Composable
 private fun AnalysisResultContent(
     result: AnalysisResult,
     isFromCache: Boolean,
     warning: String?
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // ═══ دالة نسخ النص الكامل ═══
+    fun copyFullText() {
+        val text = buildString {
+            appendLine("═".repeat(50))
+            appendLine("تقرير تحليل الموقع")
+            appendLine("═".repeat(50))
+
+            if (result.rating > 0f) {
+                appendLine("\n⭐ التقييم: ${String.format("%.1f", result.rating)} / 10")
+            }
+            if (result.overview.isNotBlank()) {
+                appendLine("\n🔍 نظرة عامة:")
+                appendLine(result.overview)
+            }
+            if (result.purpose.isNotBlank()) {
+                appendLine("\n🎯 الغرض والهدف:")
+                appendLine(result.purpose)
+            }
+            if (result.features.isNotEmpty()) {
+                appendLine("\n⭐ الميزات:")
+                result.features.forEach { appendLine("  • $it") }
+            }
+            if (result.techStack.isNotEmpty()) {
+                appendLine("\n🛠 التقنيات:")
+                result.techStack.forEach { appendLine("  • $it") }
+            }
+            if (result.howToUse.isNotBlank()) {
+                appendLine("\n🚀 كيفية البدء:")
+                appendLine(result.howToUse)
+            }
+            if (result.examples.isNotBlank()) {
+                appendLine("\n💻 أمثلة:")
+                appendLine(result.examples)
+            }
+            if (result.prosAndCons.pros.isNotEmpty()) {
+                appendLine("\n✅ نقاط القوة:")
+                result.prosAndCons.pros.forEach { appendLine("  • $it") }
+            }
+            if (result.prosAndCons.cons.isNotEmpty()) {
+                appendLine("\n⚠️ نقاط الضعف:")
+                result.prosAndCons.cons.forEach { appendLine("  • $it") }
+            }
+            appendLine("\n═".repeat(50))
+        }
+
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("analysis", text))
+        Toast.makeText(context, "تم نسخ النص الكامل", Toast.LENGTH_SHORT).show()
+    }
+
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // ═══ زر نسخ الكل ═══
+        item {
+            Button(
+                onClick = { copyFullText() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            ) {
+                Icon(
+                    Icons.Filled.ContentCopy,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("نسخ النص الكامل", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // ═══ تحذير التخزين المؤقت ═══
         if (isFromCache) {
             item {
                 Card(
@@ -307,111 +394,6 @@ private fun AnalysisResultContent(
                 }
             }
         }
-
-        if (result.rating > 0f) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            String.format("%.1f", result.rating),
-                            fontSize = 40.sp,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(" / 10", fontSize = 20.sp, fontWeight = FontWeight.Light)
-                        Spacer(Modifier.width(16.dp))
-                        Text(
-                            when {
-                                result.rating >= 8f -> "ممتاز"
-                                result.rating >= 6f -> "جيد"
-                                result.rating >= 4f -> "مقبول"
-                                else -> "يحتاج تحسين"
-                            },
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-        }
-
-        if (result.overview.isNotBlank()) {
-            item { AnalysisSectionCard("نظرة عامة", result.overview) }
-        }
-        if (result.purpose.isNotBlank()) {
-            item { AnalysisSectionCard("الغرض والهدف", result.purpose) }
-        }
-        if (result.features.isNotEmpty()) {
-            item { AnalysisBulletCard("الميزات", result.features, Color(0xFF5BD9A8)) }
-        }
-        if (result.techStack.isNotEmpty()) {
-            item { AnalysisBulletCard("التقنيات", result.techStack, Color(0xFF5B8DD9)) }
-        }
-        if (result.howToUse.isNotBlank()) {
-            item { AnalysisSectionCard("كيفية البدء", result.howToUse) }
-        }
-        if (result.examples.isNotBlank()) {
-            item { AnalysisCodeCard("أمثلة", result.examples) }
-        }
-        if (result.prosAndCons.pros.isNotEmpty()) {
-            item { AnalysisBulletCard("نقاط القوة", result.prosAndCons.pros, Color(0xFF4CAF50)) }
-        }
-        if (result.prosAndCons.cons.isNotEmpty()) {
-            item { AnalysisBulletCard("نقاط الضعف", result.prosAndCons.cons, Color(0xFFFF9800)) }
-        }
-
-        if (result.rawMarkdown.isNotBlank()) {
-            item {
-                var expanded by remember { mutableStateOf(false) }
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { expanded = !expanded },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("النص الكامل", fontWeight = FontWeight.Bold)
-                            Icon(
-                                if (expanded) Icons.Filled.ExpandLess
-                                else Icons.Filled.ExpandMore,
-                                contentDescription = null
-                            )
-                        }
-                        AnimatedVisibility(visible = expanded) {
-                            Text(
-                                result.rawMarkdown,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(top = 12.dp),
-                                lineHeight = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        item { Spacer(Modifier.height(32.dp)) }
-    }
-}
 
 @Composable
 private fun AnalysisSectionCard(title: String, content: String) {
