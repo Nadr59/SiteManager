@@ -1,31 +1,31 @@
-package com.example.sitemanager.data.repository
+package com.nadr59.sitemanager.data.repository
 
-import com.example.sitemanager.data.local.SiteDao
-import com.example.sitemanager.data.local.SiteEntity
+import com.nadr59.sitemanager.data.local.SiteDao
+import com.nadr59.sitemanager.data.local.SiteEntity
 import kotlinx.coroutines.flow.Flow
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class SiteRepository(private val dao: SiteDao) {
+@Singleton
+class SiteRepository @Inject constructor(
+    private val siteDao: SiteDao
+) {
+    fun getAllSites(): Flow<List<SiteEntity>> = siteDao.getAllSites()
 
-    fun getFavorites(): Flow<List<SiteEntity>> = dao.getFavorites()
+    fun getSitesByCategory(category: String): Flow<List<SiteEntity>> =
+        siteDao.getSitesByCategory(category)
 
-    fun getSaved(): Flow<List<SiteEntity>> = dao.getSaved()
+    fun getAllCategories(): Flow<List<String>> = siteDao.getAllCategories()
 
-    fun search(query: String): Flow<List<SiteEntity>> = dao.search(query)
+    fun searchSites(query: String): Flow<List<SiteEntity>> = siteDao.searchSites(query)
 
-    suspend fun addSite(site: SiteEntity): Boolean {
-        val existing = dao.getByUrl(site.url)
-        if (existing != null) return false
-        dao.insert(site)
-        return true
-    }
+    suspend fun insertSite(site: SiteEntity) = siteDao.insertSite(site)
 
-    suspend fun update(site: SiteEntity) = dao.update(site)
+    suspend fun updateSite(site: SiteEntity) = siteDao.updateSite(site)
 
-    suspend fun delete(site: SiteEntity) = dao.delete(site)
+    suspend fun deleteSite(site: SiteEntity) = siteDao.deleteSite(site)
 
-    suspend fun moveToTab(id: Long, newTabType: String) = dao.moveToTab(id, newTabType)
+    suspend fun getSiteById(id: Int): SiteEntity? = siteDao.getSiteById(id)
 
-    suspend fun incrementClick(id: Long) = dao.incrementClickCount(id)
-
-    suspend fun updateTitle(id: Long, title: String) = dao.updateTitle(id, title)
+    suspend fun incrementVisit(id: Int) = siteDao.incrementVisitCount(id)
 }
