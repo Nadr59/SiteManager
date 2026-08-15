@@ -74,6 +74,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Share
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -199,6 +200,34 @@ fun AnalysisScreen(
                     }
                 },
                 actions = {
+    IconButton(onClick = {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, buildString {
+                appendLine("📊 تحليل: $siteName")
+                appendLine("🔗 $siteUrl")
+                result?.let { r ->
+                    if (r.rating > 0f) appendLine("⭐ ${String.format("%.1f", r.rating)}/10")
+                    if (r.overview.isNotBlank()) appendLine("\n${r.overview.take(300)}")
+                }
+                appendLine("\n— تم التحليل عبر مدير المواقع")
+            })
+            putExtra(Intent.EXTRA_SUBJECT, "تحليل: $siteName")
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "مشاركة التحليل"))
+    }) {
+        Icon(Icons.Filled.Share, contentDescription = "مشاركة")
+    }
+
+    // زر تحديث
+    IconButton(
+        onClick = { startAnalysis(forceRefresh = true) },
+        enabled = !isLoading
+    ) {
+        Icon(Icons.Filled.Refresh, contentDescription = "تحديث")
+    }
+}
+                    
                     IconButton(
                         onClick = { startAnalysis(forceRefresh = true) },
                         enabled = !isLoading
