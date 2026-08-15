@@ -1,4 +1,4 @@
-package com.example.sitemanager.ui.components
+package com.nadr59.sitemanager.ui.components
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row

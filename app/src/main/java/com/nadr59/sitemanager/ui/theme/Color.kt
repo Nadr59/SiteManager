@@ -1,4 +1,4 @@
-package com.example.sitemanager.ui.theme
+package com.nadr59.sitemanager.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

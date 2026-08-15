@@ -1,4 +1,4 @@
-package com.example.sitemanager.ui.components
+package com.nadr59.sitemanager.ui.components
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -20,7 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.sitemanager.data.local.SiteEntity
+import com.nadr59.sitemanager.data.local.SiteEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
