@@ -11,10 +11,10 @@ import javax.inject.Singleton
 @Singleton
 class WebScraper @Inject constructor() {
 
-    companion object {
-        private const val MAX_CONTENT = 8000
-        private const val TIMEOUT = 15_000
-    }
+companion object {
+    private const val MAX_CONTENT = 6000    // ← قللت من 8000 لتقليل حجم الطلب
+    private const val TIMEOUT = 20_000     // ← زدت من 15000
+}
 
     suspend fun scrape(url: String): SiteContent = withContext(Dispatchers.IO) {
         try {
