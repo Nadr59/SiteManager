@@ -174,6 +174,51 @@ fun MainScreen(viewModel: SiteViewModel) {
         }
     }
 
+    // ═══ في دالة HomeScreen، أضف المعامل الجديد ═══
+@Composable
+fun HomeScreen(
+    viewModel: SiteViewModel,
+    onNavigateToAdd: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToAnalysis: (Int, String, String) -> Unit  // ← جديد: (siteId, name, url)
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    Scaffold(
+        topBar = { /* ... كما هو ... */ },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onNavigateToAdd) {
+                Icon(Icons.Filled.Add, "إضافة موقع")
+            }
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ... شريط البحث والفلاتر كما هو ...
+
+            // ═══ قائمة المواقع — مع زر التحليل ═══
+            items(
+                items = state.filteredSites,
+                key = { it.id }
+            ) { site ->
+                SiteCard(
+                    site = site,
+                    onVisit = { viewModel.incrementVisit(site.id) },
+                    onAnalyze = {  // ← جديد
+                        onNavigateToAnalysis(site.id, site.name, site.url)
+                    },
+                    onEdit = { /* ... */ },
+                    onDelete = { viewModel.deleteSite(site) }
+                )
+            }
+        }
+    }
+}
     // ═══ Bottom Sheet: إضافة موقع (من المشاركة) ═══
     if (uiState.showAddSheet && uiState.sharedUrl != null) {
         AddSiteBottomSheet(
