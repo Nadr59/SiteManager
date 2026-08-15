@@ -109,144 +109,87 @@ fun AnalysisScreen(
         )
     }
 
-    fun startAnalysis(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoading = true
-            error = null
-            loadingStep = ""
+     fun startAnalysis(forceRefresh: Boolean = false) {
+    scope.launch {
+        isLoading = true
+        error = null
+        loadingStep = "جارٍ التحقق من الإعدادات..."
 
-            try {
-                val config = withContext(Dispatchers.IO) { loadConfig() }
+        try {
+            val config = withContext(Dispatchers.IO) { loadConfig() }
 
-                if (config.apiKey.isBlank()) {
-                    error = "أدخل مفتاح AI من الإعدادات أولاً"
+            if (config.apiKey.isBlank()) {
+                error = "أدخل مفتاح AI من الإعدادات أولاً"
+                isLoading = false
+                return@launch
+            }
+
+            // ═══ محاولة التخزين المؤقت ═══
+            if (!forceRefresh) {
+                loadingStep = "البحث عن تحليل محفوظ..."
+                val cached = withContext(Dispatchers.IO) { repo.getCachedAnalysis(siteId) }
+                val stale = withContext(Dispatchers.IO) { repo.isAnalysisStale(siteId) }
+                if (cached != null && !stale) {
+                    result = cached
+                    isFromCache = true
                     isLoading = false
                     return@launch
                 }
-
-                if (!forceRefresh) {
-                    val cached = withContext(Dispatchers.IO) { repo.getCachedAnalysis(siteId) }
-                    val stale = withContext(Dispatchers.IO) { repo.isAnalysisStale(siteId) }
-                    if (cached != null && !stale) {
-                        result = cached
-                        isFromCache = true
-                        isLoading = false
-                        return@launch
-                    }
-                }
-
-                loadingStep = "جارٍ جمع محتوى الموقع..."
-                withContext(Dispatchers.IO) { kotlinx.coroutines.delay(300) }
-                loadingStep = "جارٍ التحليل بالذكاء الاصطناعي..."
-
-                val res = withContext(Dispatchers.IO) { repo.analyze(siteId, config) }
-
-                res.fold(
-                    onSuccess = {
-                        result = it
-                        isFromCache = false
-                        error = null
-                    },
-                    onFailure = { e ->
-                        val fallback = withContext(Dispatchers.IO) { repo.getCachedAnalysis(siteId) }
-                        if (fallback != null) {
-                            result = fallback
-                            isFromCache = true
-                            error = "عرض تحليل محفوظ (${e.message})"
-                        } else {
-                            error = e.message
-                        }
-                    }
-                )
-            } catch (e: Exception) {
-                error = e.message
             }
-            isLoading = false
-        }
-    }
 
-    LaunchedEffect(siteId) {
-        startAnalysis(forceRefresh = false)
-    }
+            // ═══ جمع المحتوى ═══
+            loadingStep = "جارٍ جمع محتوى الموقع..."
+            withContext(Dispatchers.IO) { kotlinx.coroutines.delay(500) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("شرح الموقع", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text(
-                            siteName,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+            // ═══ التحليل بالـ AI ═══
+            loadingStep = "جارٍ إرسال المحتوى للذكاء الاصطناعي..."
+            kotlinx.coroutines.delay(500)
+            loadingStep = "جارٍ التحليل... قد يستغرق هذا 30-60 ثانية"
+
+            val res = withContext(Dispatchers.IO) { repo.analyze(siteId, config) }
+
+            res.fold(
+                onSuccess = {
+                    result = it
+                    isFromCache = false
+                    error = null
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
-                    }
-                },
-                actions = {
-                    // زر مشاركة
-                    IconButton(onClick = {
-                        val shareText = buildString {
-                            appendLine("تقرير تحليل: $siteName")
-                            appendLine("الرابط: $siteUrl")
-                            result?.let { r ->
-                                if (r.rating > 0f) {
-                                    appendLine("التقييم: ${String.format("%.1f", r.rating)} / 10")
-                                }
-                                if (r.overview.isNotBlank()) {
-                                    appendLine("")
-                                    appendLine(r.overview.take(300))
-                                }
-                            }
-                            appendLine("")
-                            appendLine("— تم التحليل عبر مدير المواقع")
-                        }
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, shareText)
-                            putExtra(Intent.EXTRA_SUBJECT, "تحليل: $siteName")
-                        }
-                        context.startActivity(Intent.createChooser(shareIntent, "مشاركة"))
-                    }) {
-                        Icon(Icons.Filled.Share, contentDescription = "مشاركة")
+                onFailure = { e ->
+                    val msg = when {
+                        e.message?.contains("timeout", true) == true ->
+                            "انتهت المهلة — الخادم بطيء. حاول مرة أخرى أو جرّب مزود آخر"
+                        e.message?.contains("429") == true ->
+                            "تم تجاوز حد الطلبات — انتظر دقيقتين ثم حاول"
+                        e.message?.contains("401") == true ->
+                            "مفتاح API غير صالح — تحقق من الإعدادات"
+                        e.message?.contains("403") == true ->
+                            "مفتاح API مرفوض أو منتهي"
+                        e.message?.contains("connect", true) == true ->
+                            "فشل الاتصال بالخادم — تحقق من الإنترنت"
+                        else -> e.message ?: "خطأ غير معروف"
                     }
 
-                    // زر تحديث
-                    IconButton(
-                        onClick = { startAnalysis(forceRefresh = true) },
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "تحديث")
+                    val fallback = withContext(Dispatchers.IO) { repo.getCachedAnalysis(siteId) }
+                    if (fallback != null) {
+                        result = fallback
+                        isFromCache = true
+                        error = "فشل التحليل الجديد: $msg\nيعرض تحليل محفوظ سابقاً"
+                    } else {
+                        error = msg
                     }
                 }
             )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            when {
-                isLoading -> LoadingView(loadingStep)
-                error != null && result == null -> ErrorView(
-                    error = error!!,
-                    onRetry = { startAnalysis(forceRefresh = true) },
-                    onBack = onBack
-                )
-                result != null -> AnalysisResultContent(
-                    result = result!!,
-                    isFromCache = isFromCache,
-                    warning = error
-                )
+        } catch (e: Exception) {
+            error = when {
+                e.message?.contains("timeout", true) == true ->
+                    "انتهت المهلة — جرّب مزود آخر أو أعد المحاولة"
+                else -> e.message ?: "خطأ غير معروف"
             }
         }
+        isLoading = false
     }
-}
+     }
+     
 
 // ═══════════════════════════════════════════════════════════
 // ═══ شاشة التحميل ═══
