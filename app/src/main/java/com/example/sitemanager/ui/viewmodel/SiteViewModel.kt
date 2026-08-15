@@ -1,182 +1,111 @@
-package com.example.sitemanager.ui.viewmodel
+package com.nadr59.sitemanager.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.sitemanager.data.local.SiteDatabase
-import com.example.sitemanager.data.local.SiteEntity
-import com.example.sitemanager.data.repository.SiteRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.nadr59.sitemanager.data.local.SiteEntity
+import com.nadr59.sitemanager.data.repository.SiteRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-data class SiteManagerUiState(
-    val selectedTab: Int = 0,       // 0 = favorites, 1 = saved
-    val isSearching: Boolean = false,
+data class SiteUiState(
     val searchQuery: String = "",
-    val showAddSheet: Boolean = false,
-    val sharedUrl: String? = null,
-    val sharedTitle: String? = null,
-    val editingSite: SiteEntity? = null,
-    val message: String? = null
-)
+    val selectedCategory: String = "الكل",
+    val allSites: List<SiteEntity> = emptyList(),
+    val categories: List<String> = emptyList(),
+    val isLoading: Boolean = true
+) {
+    val filteredSites: List<SiteEntity>
+        get() {
+            var result = allSites
+            if (selectedCategory != "الكل") {
+                result = result.filter { it.category == selectedCategory }
+            }
+            if (searchQuery.isNotBlank()) {
+                val q = searchQuery.lowercase()
+                result = result.filter {
+                    it.name.lowercase().contains(q) ||
+                    it.url.lowercase().contains(q) ||
+                    it.notes.lowercase().contains(q)
+                }
+            }
+            return result
+        }
+}
 
-@OptIn(ExperimentalCoroutinesApi::class)
-class SiteViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class SiteViewModel @Inject constructor(
+    private val repository: SiteRepository
+) : ViewModel() {
 
-    private val db = SiteDatabase.getDatabase(application)
-    private val repository = SiteRepository(db.siteDao())
-
-    private val _uiState = MutableStateFlow(SiteManagerUiState())
-    val uiState: StateFlow<SiteManagerUiState> = _uiState.asStateFlow()
-
-    // ═══ بحث ═══
     private val _searchQuery = MutableStateFlow("")
+    private val _selectedCategory = MutableStateFlow("الكل")
 
-    val searchResults: StateFlow<List<SiteEntity>> = _searchQuery
-        .flatMapLatest { query ->
-            if (query.isBlank()) {
-                kotlinx.coroutines.flow.flowOf(emptyList())
-            } else {
-                repository.search(query)
+    private val _uiState = MutableStateFlow(SiteUiState())
+    val uiState: StateFlow<SiteUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            combine(
+                repository.getAllSites(),
+                repository.getAllCategories(),
+                _searchQuery,
+                _selectedCategory
+            ) { sites, categories, query, category ->
+                SiteUiState(
+                    searchQuery = query,
+                    selectedCategory = category,
+                    allSites = sites,
+                    categories = categories,
+                    isLoading = false
+                )
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = SiteUiState()
+            ).collect { state ->
+                _uiState.value = state
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // ═══ التبويبات ═══
-    val favorites: StateFlow<List<SiteEntity>> = repository.getFavorites()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val savedSites: StateFlow<List<SiteEntity>> = repository.getSaved()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // ═══ اختيار التبويب ═══
-    fun onTabSelected(tab: Int) {
-        _uiState.value = _uiState.value.copy(selectedTab = tab)
     }
 
-    // ═══ البحث ═══
-    fun onSearchToggle() {
-        val current = _uiState.value
-        if (current.isSearching) {
-            _uiState.value = current.copy(isSearching = false, searchQuery = "")
-            _searchQuery.value = ""
-        } else {
-            _uiState.value = current.copy(isSearching = true)
-        }
-    }
-
-    fun onSearchQueryChanged(query: String) {
-        _uiState.value = _uiState.value.copy(searchQuery = query)
+    fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+        _uiState.value = _uiState.value.copy(searchQuery = query)
     }
 
-    // ═══ استقبال المشاركة ═══
-    fun onShareReceived(url: String?, title: String?) {
-        if (url.isNullOrBlank()) return
-        _uiState.value = _uiState.value.copy(
-            showAddSheet = true,
-            sharedUrl = url,
-            sharedTitle = title ?: extractDomain(url)
-        )
+    fun selectCategory(category: String) {
+        _selectedCategory.value = category
+        _uiState.value = _uiState.value.copy(selectedCategory = category)
     }
 
-    fun onAddSheetDismissed() {
-        _uiState.value = _uiState.value.copy(
-            showAddSheet = false,
-            sharedUrl = null,
-            sharedTitle = null
-        )
-    }
-
-    fun addSite(tabType: String, customTitle: String? = null) {
-        val url = _uiState.value.sharedUrl ?: return
-        val title = customTitle?.ifBlank { null }
-            ?: _uiState.value.sharedTitle
-            ?: extractDomain(url)
-
-        val faviconUrl = "https://www.google.com/s2/favicons?domain=${extractDomain(url)}&sz=64"
-
+    fun addSite(site: SiteEntity) {
         viewModelScope.launch {
-            val site = SiteEntity(
-                url = url,
-                title = title,
-                tabType = tabType,
-                faviconUrl = faviconUrl
-            )
-            val added = repository.addSite(site)
-            _uiState.value = _uiState.value.copy(
-                showAddSheet = false,
-                sharedUrl = null,
-                sharedTitle = null,
-                message = if (added) "تمت الإضافة" else "الموقع موجود مسبقاً"
-            )
+            repository.insertSite(site)
         }
     }
 
-    // ═══ فتح الموقع ═══
-    fun onSiteOpened(site: SiteEntity) {
+    fun updateSite(site: SiteEntity) {
         viewModelScope.launch {
-            repository.incrementClick(site.id)
+            repository.updateSite(site)
         }
     }
 
-    // ═══ تعديل الاسم ═══
-    fun onEditSite(site: SiteEntity) {
-        _uiState.value = _uiState.value.copy(editingSite = site)
-    }
-
-    fun onEditDismissed() {
-        _uiState.value = _uiState.value.copy(editingSite = null)
-    }
-
-    fun onTitleUpdated(newTitle: String) {
-        val site = _uiState.value.editingSite ?: return
+    fun deleteSite(site: SiteEntity) {
         viewModelScope.launch {
-            repository.updateTitle(site.id, newTitle)
-            _uiState.value = _uiState.value.copy(
-                editingSite = null,
-                message = "تم التعديل"
-            )
+            repository.deleteSite(site)
         }
     }
 
-    // ═══ نقل بين التبويبات ═══
-    fun onMoveToTab(site: SiteEntity) {
-        val newTab = if (site.tabType == "favorites") "saved" else "favorites"
+    fun incrementVisit(id: Int) {
         viewModelScope.launch {
-            repository.moveToTab(site.id, newTab)
-            _uiState.value = _uiState.value.copy(
-                message = if (newTab == "favorites") "نُقل إلى الأكثر استخداماً" else "نُقل إلى المحفوظات"
-            )
-        }
-    }
-
-    // ═══ حذف ═══
-    fun onDeleteSite(site: SiteEntity) {
-        viewModelScope.launch {
-            repository.delete(site)
-            _uiState.value = _uiState.value.copy(message = "تم الحذف")
-        }
-    }
-
-    // ═══ رسالة ═══
-    fun onMessageShown() {
-        _uiState.value = _uiState.value.copy(message = null)
-    }
-
-    // ═══ أداة مساعدة ═══
-    private fun extractDomain(url: String): String {
-        return try {
-            val host = java.net.URI(url).host ?: url
-            host.removePrefix("www.")
-        } catch (_: Exception) {
-            url.take(30)
+            repository.incrementVisit(id)
         }
     }
 }
