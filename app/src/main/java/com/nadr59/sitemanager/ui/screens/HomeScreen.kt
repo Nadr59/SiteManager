@@ -1,15 +1,8 @@
 package com.nadr59.sitemanager.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,12 +38,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,43 +62,44 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     viewModel: SiteViewModel,
-    sharedUrl: String?,                    // ← جديد
-    onSharedUrlConsumed: () -> Unit,       // ← جديد
+    sharedUrl: String?,
+    onSharedUrlConsumed: () -> Unit,
     onNavigateToAdd: () -> Unit,
+    onNavigateToAddWithUrl: (String) -> Unit,   // ← جديد
     onNavigateToSettings: () -> Unit,
     onNavigateToAnalysis: (Int, String, String) -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var siteToDelete by remember { mutableStateOf<SiteEntity?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }  // ← جديد
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // ═══ معالجة الرابط المُشارك ═══
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank()) {
             val result = snackbarHostState.showSnackbar(
-                message = "تم استلام رابط: ${sharedUrl.take(50)}...",
+                message = "تم استلام رابط",
                 actionLabel = "إضافة",
-                duration = androidx.compose.material3.SnackbarDuration.Long
+                duration = SnackbarDuration.Long
             )
-            if (result == SnackbarResult.ActionPerformed) {
-                onNavigateToAdd()
+            when (result) {
+                SnackbarResult.ActionPerformed -> {
+                    // ═══ تمرير الرابط مباشرة للشاشة ═══
+                    onNavigateToAddWithUrl(sharedUrl)
+                }
+                SnackbarResult.Dismissed -> {
+                    onSharedUrlConsumed()
+                }
             }
-            onSharedUrlConsumed()
         }
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },  // ← جديد
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -136,7 +135,7 @@ fun HomeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ═══ شريط البحث ═══
+            // شريط البحث
             item {
                 OutlinedTextField(
                     value = state.searchQuery,
@@ -158,11 +157,9 @@ fun HomeScreen(
                 )
             }
 
-            // ═══ فلاتر التصنيفات ═══
+            // فلاتر التصنيفات
             item {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val allCategories = listOf("الكل") + state.categories
                     items(allCategories) { category ->
                         FilterChip(
@@ -175,7 +172,7 @@ fun HomeScreen(
                 }
             }
 
-            // ═══ عدد النتائج ═══
+            // عدد النتائج
             item {
                 Text(
                     "${state.filteredSites.size} موقع",
@@ -185,7 +182,7 @@ fun HomeScreen(
                 )
             }
 
-            // ═══ قائمة المواقع ═══
+            // قائمة المواقع
             items(
                 items = state.filteredSites,
                 key = { it.id }
@@ -193,15 +190,13 @@ fun HomeScreen(
                 SiteCard(
                     site = site,
                     onVisit = { viewModel.incrementVisit(site.id) },
-                    onAnalyze = {
-                        onNavigateToAnalysis(site.id, site.name, site.url)
-                    },
-                    onEdit = { /* يمكن إضافته لاحقاً */ },
+                    onAnalyze = { onNavigateToAnalysis(site.id, site.name, site.url) },
+                    onEdit = { },
                     onDelete = { siteToDelete = site }
                 )
             }
 
-            // ═══ حالة فارغة ═══
+            // حالة فارغة
             if (state.filteredSites.isEmpty() && !state.isLoading) {
                 item {
                     Column(
@@ -210,13 +205,9 @@ fun HomeScreen(
                             .padding(vertical = 48.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("🌐", fontSize = 48.sp)
+                        Text("\uD83C\uDF10", fontSize = 48.sp)
                         Spacer(Modifier.height(16.dp))
-                        Text(
-                            "لا توجد مواقع",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
+                        Text("لا توجد مواقع", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Text(
                             "اضغط + لإضافة موقعك الأول",
                             fontSize = 14.sp,
@@ -228,7 +219,7 @@ fun HomeScreen(
         }
     }
 
-    // ═══ حوار تأكيد الحذف ═══
+    // حوار تأكيد الحذف
     siteToDelete?.let { site ->
         AlertDialog(
             onDismissRequest = { siteToDelete = null },
@@ -251,9 +242,9 @@ fun HomeScreen(
     }
 }
 
-// ═══════════════════════════════════════════════════════
-// ═══ SiteCard — بطاقة الموقع ═══
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// ═══ SiteCard ═══
+// ═══════════════════════════════════════════════════════════
 @Composable
 fun SiteCard(
     site: SiteEntity,
@@ -271,7 +262,6 @@ fun SiteCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // الصف الأول: الاسم + التصنيف
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -307,7 +297,6 @@ fun SiteCard(
                 }
             }
 
-            // الملاحظات
             if (site.notes.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -319,7 +308,6 @@ fun SiteCard(
                 )
             }
 
-            // بيانات التحليل المحفوظة
             if (site.cachedOverview.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
                 Surface(
@@ -354,10 +342,7 @@ fun SiteCard(
                             ) {
                                 Text(
                                     " ${String.format("%.0f", site.aiRating)}/10 ",
-                                    modifier = Modifier.padding(
-                                        horizontal = 8.dp,
-                                        vertical = 4.dp
-                                    ),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -370,7 +355,6 @@ fun SiteCard(
 
             Spacer(Modifier.height(12.dp))
 
-            // الأزرار
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -380,16 +364,11 @@ fun SiteCard(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Icon(
-                        Icons.Outlined.Language,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Outlined.Language, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("زيارة", fontSize = 13.sp)
                 }
 
-                // زر شرح (الجديد)
                 Surface(
                     onClick = onAnalyze,
                     modifier = Modifier.weight(1f),
@@ -402,42 +381,18 @@ fun SiteCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            Icons.Filled.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(
-                            "شرح",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("شرح", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                IconButton(
-                    onClick = onEdit,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Outlined.Edit,
-                        contentDescription = "تعديل",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Outlined.Edit, contentDescription = "تعديل", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = "حذف",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.Delete, contentDescription = "حذف", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
