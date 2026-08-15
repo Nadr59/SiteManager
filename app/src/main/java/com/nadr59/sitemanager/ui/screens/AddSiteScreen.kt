@@ -1,5 +1,6 @@
 package com.nadr59.sitemanager.ui.screens
 
+import android.webkit.URLUtil
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -25,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,12 +42,34 @@ import com.nadr59.sitemanager.viewmodel.SiteViewModel
 @Composable
 fun AddSiteScreen(
     viewModel: SiteViewModel,
+    initialUrl: String? = null,
     onBack: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf(initialUrl ?: "") }
     var category by remember { mutableStateOf("عام") }
     var notes by remember { mutableStateOf("") }
+
+    // ═══ استخراج اسم تلقائي من الرابط ═══
+    LaunchedEffect(initialUrl) {
+        if (!initialUrl.isNullOrBlank()) {
+            url = initialUrl
+            // استخراج اسم من الرابط
+            name = try {
+                val host = java.net.URL(
+                    if (initialUrl.startsWith("http")) initialUrl
+                    else "https://$initialUrl"
+                ).host
+                    .removePrefix("www.")
+                    .split(".")
+                    .first()
+                    .replaceFirstChar { it.uppercase() }
+                host
+            } catch (_: Exception) {
+                ""
+            }
+        }
+    }
 
     val categories = listOf("عام", "أداة", "مكتبة", "توثيق", "تعليم", "إخباري", "أخرى")
 
@@ -69,6 +93,21 @@ fun AddSiteScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // ═══ إشعار المشاركة ═══
+            if (!initialUrl.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        "تم استلام رابط من المشاركة — يمكنك تعديل البيانات قبل الحفظ",
+                        modifier = Modifier.padding(12.dp),
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
