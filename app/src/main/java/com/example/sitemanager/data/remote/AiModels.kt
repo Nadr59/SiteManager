@@ -49,8 +49,10 @@ data class AnalysisResult(
         ): AnalysisResult {
             return AnalysisResult(
                 overview = overview,
-                techStack = techTechStack.split(",").filter { it.isNotBlank() },
-                features = features.split("|").filter { it.isNotBlank() },
+                techStack = if (techStack.isBlank()) emptyList()
+                    else techStack.split(",").map { it.trim() }.filter { it.isNotBlank() },
+                features = if (features.isBlank()) emptyList()
+                    else features.split("|").map { it.trim() }.filter { it.isNotBlank() },
                 rating = rating
             )
         }
