@@ -1,7 +1,6 @@
 package com.nadr59.sitemanager.di
 
 import android.content.Context
-import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.nadr59.sitemanager.data.local.SiteDao
@@ -32,10 +31,4 @@ object AppModule {
     @Provides
     @Singleton
     fun provideGson(): Gson = GsonBuilder().create()
-
-    @Provides
-    @Singleton
-    fun provideSharedPreferences(@ApplicationContext context: Context): SharedPreferences {
-        return context.getSharedPreferences("sitemanager_prefs", Context.MODE_PRIVATE)
-    }
 }
