@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SiteEntity::class],
-    version = 2,  // رفع الإصدار من 1 إلى 2
+    version = 2,
     exportSchema = false
 )
 abstract class SiteDatabase : RoomDatabase() {
@@ -20,7 +20,6 @@ abstract class SiteDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: SiteDatabase? = null
 
-        // ═══ Migration: إضافة أعمدة التحليل ═══
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE sites ADD COLUMN siteType TEXT NOT NULL DEFAULT ''")
@@ -35,15 +34,14 @@ abstract class SiteDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): SiteDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
+                Room.databaseBuilder(
                     context.applicationContext,
                     SiteDatabase::class.java,
                     "site_manager_db"
                 )
                 .addMigrations(MIGRATION_1_2)
                 .build()
-                INSTANCE = instance
-                instance
+                .also { INSTANCE = it }
             }
         }
     }
