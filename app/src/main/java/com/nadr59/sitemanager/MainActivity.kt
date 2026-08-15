@@ -1,5 +1,6 @@
 package com.nadr59.sitemanager
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -7,6 +8,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -26,9 +30,17 @@ import java.net.URLEncoder
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    // ═══ الرابط المستلم من المشاركة ═══
+    private var sharedUrl by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // ═══ معالجة intent عند التشغيل الأول ═══
+        handleIntent(intent)
+
         setContent {
             SiteManagerTheme {
                 Surface(
@@ -47,12 +59,10 @@ class MainActivity : ComponentActivity() {
                             val viewModel: SiteViewModel = hiltViewModel()
                             HomeScreen(
                                 viewModel = viewModel,
-                                onNavigateToAdd = {
-                                    navController.navigate("add")
-                                },
-                                onNavigateToSettings = {
-                                    navController.navigate("settings")
-                                },
+                                sharedUrl = sharedUrl,
+                                onSharedUrlConsumed = { sharedUrl = null },
+                                onNavigateToAdd = { navController.navigate("add") },
+                                onNavigateToSettings = { navController.navigate("settings") },
                                 onNavigateToAnalysis = { siteId, name, url ->
                                     val encodedName = URLEncoder.encode(name, "UTF-8")
                                     val encodedUrl = URLEncoder.encode(url, "UTF-8")
@@ -68,7 +78,11 @@ class MainActivity : ComponentActivity() {
                             val viewModel: SiteViewModel = hiltViewModel()
                             AddSiteScreen(
                                 viewModel = viewModel,
-                                onBack = { navController.popBackStack() }
+                                initialUrl = sharedUrl,
+                                onBack = {
+                                    sharedUrl = null
+                                    navController.popBackStack()
+                                }
                             )
                         }
 
@@ -108,5 +122,25 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    // ═══ معالجة Intent عند التشغيل الأول ═══
+    private fun handleIntent(intent: Intent?) {
+        when (intent?.action) {
+            Intent.ACTION_SEND -> {
+                if (intent.type == "text/plain") {
+                    sharedUrl = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim()
+                }
+            }
+            Intent.ACTION_VIEW -> {
+                sharedUrl = intent.data?.toString()
+            }
+        }
+    }
+
+    // ═══ معالجة Intent عند استقبال مشاركة جديدة (التطبيق مفتوح) ═══
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
     }
 }
