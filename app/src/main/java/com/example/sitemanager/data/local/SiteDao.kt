@@ -1,12 +1,15 @@
 package com.nadr59.sitemanager.data.local
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SiteDao {
-
-    // ═══ العمليات الأساسية (موجودة مسبقًا) ═══
 
     @Query("SELECT * FROM sites ORDER BY category, name")
     fun getAllSites(): Flow<List<SiteEntity>>
@@ -17,7 +20,13 @@ interface SiteDao {
     @Query("SELECT DISTINCT category FROM sites ORDER BY category")
     fun getAllCategories(): Flow<List<String>>
 
-    @Query("SELECT * FROM sites WHERE name LIKE '%' || :query || '%' OR url LIKE '%' || :query || '%' OR notes LIKE '%' || :query || '%'")
+    @Query("""
+        SELECT * FROM sites
+        WHERE name LIKE '%' || :query || '%'
+           OR url LIKE '%' || :query || '%'
+           OR notes LIKE '%' || :query || '%'
+        ORDER BY name
+    """)
     fun searchSites(query: String): Flow<List<SiteEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -37,8 +46,6 @@ interface SiteDao {
 
     @Query("UPDATE sites SET visitCount = visitCount + 1 WHERE id = :id")
     suspend fun incrementVisitCount(id: Int)
-
-    // ═══ عمليات التحليل الجديدة ═══
 
     @Query("""
         UPDATE sites SET
@@ -64,12 +71,13 @@ interface SiteDao {
     @Query("SELECT * FROM sites WHERE lastAnalyzed > 0 ORDER BY lastAnalyzed DESC LIMIT 10")
     fun getRecentlyAnalyzed(): Flow<List<SiteEntity>>
 
-    @Query("SELECT * FROM sites WHERE siteType = :type ORDER BY name")
-    fun getSitesByType(type: String): Flow<List<SiteEntity>>
-
-    @Query("UPDATE sites SET cachedOverview = '', cachedTechStack = '', cachedFeatures = '', lastAnalyzed = 0 WHERE id = :siteId")
+    @Query("""
+        UPDATE sites SET
+            cachedOverview = '',
+            cachedTechStack = '',
+            cachedFeatures = '',
+            lastAnalyzed = 0
+        WHERE id = :siteId
+    """)
     suspend fun clearAnalysisCache(siteId: Int)
-
-    @Query("SELECT COUNT(*) FROM sites WHERE lastAnalyzed > 0")
-    fun getAnalyzedCount(): Flow<Int>
 }
