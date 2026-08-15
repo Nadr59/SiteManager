@@ -8,14 +8,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.nadr59.sitemanager.ui.screens.*
+import com.nadr59.sitemanager.ui.screens.AddSiteScreen
+import com.nadr59.sitemanager.ui.screens.AnalysisScreen
+import com.nadr59.sitemanager.ui.screens.HomeScreen
+import com.nadr59.sitemanager.ui.screens.SettingsScreen
 import com.nadr59.sitemanager.ui.theme.SiteManagerTheme
+import com.nadr59.sitemanager.viewmodel.SiteViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -30,37 +37,49 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val navController = rememberNavController()
 
-                    NavHost(navController = navController, startDestination = "home") {
+                    NavHost(
+                        navController = navController,
+                        startDestination = "home"
+                    ) {
 
-                        // الشاشة الرئيسية
+                        // ═══ الشاشة الرئيسية ═══
                         composable("home") {
+                            val viewModel: SiteViewModel = hiltViewModel()
                             HomeScreen(
-                                viewModel = hiltViewModel(),
-                                onNavigateToAdd = { navController.navigate("add") },
-                                onNavigateToSettings = { navController.navigate("settings") },
-                                // ═══ جديد: التنقل لشاشة التحليل ═══
+                                viewModel = viewModel,
+                                onNavigateToAdd = {
+                                    navController.navigate("add")
+                                },
+                                onNavigateToSettings = {
+                                    navController.navigate("settings")
+                                },
                                 onNavigateToAnalysis = { siteId, name, url ->
-                                    navController.navigate("analysis/$siteId/${java.net.URLEncoder.encode(name, "UTF-8")}/${java.net.URLEncoder.encode(url, "UTF-8")}")
+                                    val encodedName = URLEncoder.encode(name, "UTF-8")
+                                    val encodedUrl = URLEncoder.encode(url, "UTF-8")
+                                    navController.navigate(
+                                        "analysis/$siteId/$encodedName/$encodedUrl"
+                                    )
                                 }
                             )
                         }
 
-                        // شاشة إضافة موقع
+                        // ═══ إضافة موقع ═══
                         composable("add") {
+                            val viewModel: SiteViewModel = hiltViewModel()
                             AddSiteScreen(
-                                viewModel = hiltViewModel(),
+                                viewModel = viewModel,
                                 onBack = { navController.popBackStack() }
                             )
                         }
 
-                        // شاشة الإعدادات
+                        // ═══ الإعدادات ═══
                         composable("settings") {
                             SettingsScreen(
                                 onBack = { navController.popBackStack() }
                             )
                         }
 
-                        // ═══ جديد: شاشة التحليل ═══
+                        // ═══ شاشة التحليل ═══
                         composable(
                             route = "analysis/{siteId}/{siteName}/{siteUrl}",
                             arguments = listOf(
@@ -70,11 +89,13 @@ class MainActivity : ComponentActivity() {
                             )
                         ) { backStackEntry ->
                             val siteId = backStackEntry.arguments?.getInt("siteId") ?: 0
-                            val siteName = java.net.URLDecoder.decode(
-                                backStackEntry.arguments?.getString("siteName") ?: "", "UTF-8"
+                            val siteName = URLDecoder.decode(
+                                backStackEntry.arguments?.getString("siteName") ?: "",
+                                "UTF-8"
                             )
-                            val siteUrl = java.net.URLDecoder.decode(
-                                backStackEntry.arguments?.getString("siteUrl") ?: "", "UTF-8"
+                            val siteUrl = URLDecoder.decode(
+                                backStackEntry.arguments?.getString("siteUrl") ?: "",
+                                "UTF-8"
                             )
                             AnalysisScreen(
                                 siteId = siteId,
