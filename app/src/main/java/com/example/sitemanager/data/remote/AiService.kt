@@ -29,14 +29,7 @@ class AiService @Inject constructor(private val gson: Gson) {
 
     private fun buildPrompt(content: SiteContent): String {
         val typeInstructions = when (content.type) {
-            SiteType.GITHUB_REPO -> """
-                هذا مستودع GitHub. ركز على:
-                1. وصف المشروع والغرض منه
-                2. التقنيات المستخدمة
-                3. كيفية التثبيت والاستخدام
-                4. هيكل المشروع والملفات المهمة
-                5. نقاط القوة والضعف
-            """.trimIndent()
+            SiteType.GITHUB_REPO -> "هذا مستودع GitHub. ركز على: وصف المشروع، التقنيات، التثبيت، الاستخدام، نقاط القوة والضعف."
             SiteType.GITHUB_PROFILE -> "حلل ملف المطور: اهتماماته، مهاراته، أبرز مشاريعه."
             SiteType.API_DOCS -> "حلل وثائق API: النقاط المهمة، طريقة الاستخدام، الأمثلة."
             SiteType.DOCUMENTATION -> "لخص الوثائق: المواضيع الرئيسية، طريقة البدء."
@@ -47,44 +40,23 @@ class AiService @Inject constructor(private val gson: Gson) {
 
         return """أنت مساعد ذكي لشرح المواقع والمستودعات البرمجية.
 
-حلل هذا الموقع: "${content.url}" (${content.type.label})
+حلل: "${content.url}" (${content.type.label})
 
 $typeInstructions
 
 المحتوى:
----
 ${content.rawContent.take(6000)}
----
 
-أجب بتنسيق Markdown:
-
+أجب بـ Markdown:
 ## نظرة عامة
-[وصف مختصر]
-
 ## الغرض والهدف
-[لماذا تم إنشاؤه]
-
 ## الميزات الرئيسية
-- ميزة 1
-- ميزة 2
-
 ## التقنيات المستخدمة
-- تقنية 1
-
 ## كيفية البدء
-[خطوات واضحة]
-
 ## أمثلة عملية
-[أمثلة]
-
 ## نقاط القوة
-- نقطة 1
-
 ## نقاط الضعف
-- ملاحظة 1
-
-## تقييم
-[تقييم من 10]"""
+## تقييم (من 10)"""
     }
 
     private suspend fun callAi(prompt: String, config: AiConfig): String {
@@ -126,13 +98,11 @@ ${content.rawContent.take(6000)}
 
     private fun extractText(body: String): String {
         val json = JsonParser.parseString(body).asJsonObject
-        // OpenAI format
         json.getAsJsonArray("choices")?.let {
             if (it.size() > 0) return it[0].asJsonObject
                 .getAsJsonObject("message")?.get("content")?.asString?.trim()
                 ?: throw Exception("فارغ")
         }
-        // Gemini format
         json.getAsJsonArray("candidates")?.let {
             if (it.size() > 0) return it[0].asJsonObject
                 .getAsJsonObject("content")?.getAsJsonArray("parts")
@@ -159,7 +129,6 @@ ${content.rawContent.take(6000)}
         }
         sections[currentKey] = current
 
-        // استخراج التقييم
         val ratingText = sections["rating"]?.toString() ?: ""
         val ratingMatch = Regex("(\\d+\\.?\\d*)\\s*/\\s*10|من\\s*(\\d+\\.?\\d*)").find(ratingText)
         val rating = (ratingMatch?.groupValues?.getOrNull(1)?.toFloatOrNull()
