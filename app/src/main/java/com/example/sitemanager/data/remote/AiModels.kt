@@ -1,6 +1,5 @@
 package com.nadr59.sitemanager.data.remote
 
-// ═══ نموذج محتوى الموقع ═══
 data class SiteContent(
     val url: String,
     val title: String = "",
@@ -21,7 +20,6 @@ enum class SiteType(val label: String, val icon: String) {
     UNKNOWN("غير معروف", "❓")
 }
 
-// ═══ نموذج نتيجة التحليل ═══
 data class AnalysisResult(
     val overview: String = "",
     val purpose: String = "",
@@ -33,7 +31,6 @@ data class AnalysisResult(
     val rating: Float = 0f,
     val rawMarkdown: String = ""
 ) {
-    // ═══ تحويل لتخزين في Room ═══
     fun toCachedOverview(): String = buildString {
         appendLine(overview)
         if (purpose.isNotBlank()) appendLine("\n$purpose")
@@ -44,7 +41,6 @@ data class AnalysisResult(
     fun toCachedFeatures(): String = features.joinToString("|")
 
     companion object {
-        // ═══ استرجاع من التخزين المؤقت ═══
         fun fromCache(
             overview: String,
             techStack: String,
@@ -53,7 +49,7 @@ data class AnalysisResult(
         ): AnalysisResult {
             return AnalysisResult(
                 overview = overview,
-                techStack = techStack.split(",").filter { it.isNotBlank() },
+                techStack = techTechStack.split(",").filter { it.isNotBlank() },
                 features = features.split("|").filter { it.isNotBlank() },
                 rating = rating
             )
