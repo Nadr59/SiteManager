@@ -15,16 +15,32 @@ import javax.inject.Singleton
 @Singleton
 class AiService @Inject constructor(private val gson: Gson) {
 
+    // ═══ مهلات أطول بكثير ═══
     private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     suspend fun analyzeSite(content: SiteContent, config: AiConfig): AnalysisResult =
         withContext(Dispatchers.IO) {
             val prompt = buildPrompt(content)
-            val raw = callAi(prompt, config)
-            parseResponse(raw)
+
+            // ═══ إعادة المحاولة 3 مرات ═══
+            var lastError: Exception? = null
+            repeat(3) { attempt ->
+                try {
+                    val raw = callAi(prompt, config)
+                    return@withContext parseResponse(raw)
+                } catch (e: Exception) {
+                    lastError = e
+                    if (attempt < 2) {
+                        Thread.sleep(2000L * (attempt + 1))
+                    }
+                }
+            }
+            throw lastError ?: Exception("فشل التحليل بعد 3 محاولات")
         }
 
     private fun buildPrompt(content: SiteContent): String {
@@ -39,14 +55,10 @@ class AiService @Inject constructor(private val gson: Gson) {
         }
 
         return """أنت مساعد ذكي لشرح المواقع والمستودعات البرمجية.
-
 حلل: "${content.url}" (${content.type.label})
-
 $typeInstructions
-
 المحتوى:
-${content.rawContent.take(6000)}
-
+${content.rawContent.take(4000)}
 أجب بـ Markdown:
 ## نظرة عامة
 ## الغرض والهدف
@@ -60,27 +72,17 @@ ${content.rawContent.take(6000)}
     }
 
     private suspend fun callAi(prompt: String, config: AiConfig): String {
-        val url = when (config.provider) {
-            "groq"       -> "https://api.groq.com/openai/v1/chat/completions"
-            "openrouter" -> "https://openrouter.ai/api/v1/chat/completions"
-            "openai"     -> "https://api.openai.com/v1/chat/completions"
-            "hcnsec"     -> "https://api.hcnsec.cn/v1/chat/completions"
-            "gemini"     -> "https://generativelanguage.googleapis.com/v1beta/models/${config.model.ifBlank { "gemini-2.0-flash" }}:generateContent?key=${config.apiKey}"
-            "custom"     -> "${config.baseUrl.trimEnd('/')}/v1/chat/completions"
-            else -> throw Exception("مزود غير معروف: ${config.provider}")
-        }
+        val url = buildApiUrl(config)
+        val model = buildModel(config)
 
-        val model = config.model.ifBlank {
-            when (config.provider) {
-                "groq" -> "llama-3.3-70b-versatile"
-                "openrouter" -> "google/gemini-2.0-flash-exp"
-                "openai" -> "gpt-4o-mini"
-                "hcnsec" -> "auto"
-                else -> "auto"
-            }
-        }
-
-        val body = """{"model":"$model","messages":[{"role":"user","content":${gson.toJson(prompt)}}],"max_tokens":3000,"temperature":0.7}"""
+        val body = gson.toJson(mapOf(
+            "model" to model,
+            "messages" to listOf(
+                mapOf("role" to "user", "content" to prompt)
+            ),
+            "max_tokens" to 2000,
+            "temperature" to 0.7
+        ))
 
         val request = Request.Builder()
             .url(url)
@@ -90,26 +92,88 @@ ${content.rawContent.take(6000)}
             .build()
 
         val response = client.newCall(request).execute()
-        val responseBody = response.body?.string() ?: throw Exception("استجابة فارغة")
-        if (response.code != 200) throw Exception("خطأ ${response.code}: ${responseBody.take(200)}")
+        val responseBody = response.body?.string()
+
+        if (response.code == 429) {
+            throw Exception("تم تجاوز حد الطلبات — انتظر قليلاً ثم حاول مرة أخرى")
+        }
+        if (response.code == 401) {
+            throw Exception("مفتاح API غير صالح — تحقق من الإعدادات")
+        }
+        if (response.code == 402 || response.code == 403) {
+            throw Exception("انتهى رصيد API أو مفتاح مرفوض")
+        }
+        if (response.code != 200) {
+            throw Exception("خطأ الخادم ${response.code}: ${responseBody?.take(150) ?: "لا تفاصيل"}")
+        }
+        if (responseBody.isNullOrBlank()) {
+            throw Exception("استجابة فارغة من الخادم")
+        }
 
         return extractText(responseBody)
     }
 
+    private fun buildApiUrl(config: AiConfig): String {
+        return when (config.provider) {
+            "groq"       -> "https://api.groq.com/openai/v1/chat/completions"
+            "openrouter" -> "https://openrouter.ai/api/v1/chat/completions"
+            "openai"     -> "https://api.openai.com/v1/chat/completions"
+            "hcnsec"     -> "https://api.hcnsec.cn/v1/chat/completions"
+            "gemini"     -> {
+                val m = config.model.ifBlank { "gemini-2.0-flash" }
+                "https://generativelanguage.googleapis.com/v1beta/models/$m:generateContent?key=${config.apiKey}"
+            }
+            "custom"     -> "${config.baseUrl.trimEnd('/')}/v1/chat/completions"
+            else -> throw Exception("مزود غير معروف: ${config.provider}")
+        }
+    }
+
+    private fun buildModel(config: AiConfig): String {
+        return config.model.ifBlank {
+            when (config.provider) {
+                "groq"       -> "llama-3.3-70b-versatile"
+                "openrouter" -> "google/gemini-2.0-flash-exp"
+                "openai"     -> "gpt-4o-mini"
+                "hcnsec"     -> "auto"
+                else         -> "auto"
+            }
+        }
+    }
+
     private fun extractText(body: String): String {
         val json = JsonParser.parseString(body).asJsonObject
-        json.getAsJsonArray("choices")?.let {
-            if (it.size() > 0) return it[0].asJsonObject
-                .getAsJsonObject("message")?.get("content")?.asString?.trim()
-                ?: throw Exception("فارغ")
+
+        // OpenAI format
+        json.getAsJsonArray("choices")?.let { choices ->
+            if (choices.size() > 0) {
+                choices[0].asJsonObject
+                    .getAsJsonObject("message")
+                    ?.get("content")
+                    ?.asString
+                    ?.trim()
+                    ?.let { return it }
+            }
         }
-        json.getAsJsonArray("candidates")?.let {
-            if (it.size() > 0) return it[0].asJsonObject
-                .getAsJsonObject("content")?.getAsJsonArray("parts")
-                ?.let { p -> if (p.size() > 0) p[0].asJsonObject.get("text").asString.trim() else null }
-                ?: throw Exception("فارغ")
+
+        // Gemini format
+        json.getAsJsonArray("candidates")?.let { candidates ->
+            if (candidates.size() > 0) {
+                candidates[0].asJsonObject
+                    .getAsJsonObject("content")
+                    ?.getAsJsonArray("parts")
+                    ?.let { parts ->
+                        if (parts.size() > 0) {
+                            parts[0].asJsonObject
+                                .get("text")
+                                ?.asString
+                                ?.trim()
+                                ?.let { return it }
+                        }
+                    }
+            }
         }
-        throw Exception("تنسيق غير متوقع")
+
+        throw Exception("تنسيق استجابة غير متوقع: ${body.take(200)}")
     }
 
     private fun parseResponse(raw: String): AnalysisResult {
