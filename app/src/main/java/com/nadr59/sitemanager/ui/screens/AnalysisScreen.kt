@@ -276,7 +276,7 @@ fun AnalysisScreen(
 // ═══════════════════════════════════════════════════════════
 // ═══ تنسيق رسائل الخطأ ═══
 // ═══════════════════════════════════════════════════════════
-private fun formatErrorMessage(e: Exception): String {
+private fun formatErrorMessage(e: Throwable): String {
     val msg = e.message ?: "خطأ غير معروف"
     return when {
         msg.contains("timeout", true) ->
