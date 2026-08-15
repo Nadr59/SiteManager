@@ -1,80 +1,91 @@
-package com.example.sitemanager
+package com.nadr59.sitemanager
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.sitemanager.ui.screens.MainScreen
-import com.example.sitemanager.ui.theme.SiteManagerTheme
-import com.example.sitemanager.ui.viewmodel.SiteViewModel
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.nadr59.sitemanager.ui.screens.*
+import com.nadr59.sitemanager.ui.theme.SiteManagerTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-
-    // ═══ نحفظ بيانات المشاركة هنا ═══
-    private var sharedUrl: String? by mutableStateOf(null)
-    private var sharedTitle: String? by mutableStateOf(null)
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // ═══ قراءة المشاركة من intent ═══
-        extractShareData(intent)
-
         setContent {
             SiteManagerTheme {
-                val viewModel: SiteViewModel = viewModel()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val navController = rememberNavController()
 
-                // ═══ عند وجود بيانات مشاركة: نمررها للـ ViewModel ═══
-                LaunchedEffect(sharedUrl) {
-                    if (sharedUrl != null) {
-                        viewModel.onShareReceived(sharedUrl, sharedTitle)
-                        sharedUrl = null
-                        sharedTitle = null
+                    NavHost(navController = navController, startDestination = "home") {
+
+                        // الشاشة الرئيسية
+                        composable("home") {
+                            HomeScreen(
+                                viewModel = hiltViewModel(),
+                                onNavigateToAdd = { navController.navigate("add") },
+                                onNavigateToSettings = { navController.navigate("settings") },
+                                // ═══ جديد: التنقل لشاشة التحليل ═══
+                                onNavigateToAnalysis = { siteId, name, url ->
+                                    navController.navigate("analysis/$siteId/${java.net.URLEncoder.encode(name, "UTF-8")}/${java.net.URLEncoder.encode(url, "UTF-8")}")
+                                }
+                            )
+                        }
+
+                        // شاشة إضافة موقع
+                        composable("add") {
+                            AddSiteScreen(
+                                viewModel = hiltViewModel(),
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // شاشة الإعدادات
+                        composable("settings") {
+                            SettingsScreen(
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // ═══ جديد: شاشة التحليل ═══
+                        composable(
+                            route = "analysis/{siteId}/{siteName}/{siteUrl}",
+                            arguments = listOf(
+                                navArgument("siteId") { type = NavType.IntType },
+                                navArgument("siteName") { type = NavType.StringType },
+                                navArgument("siteUrl") { type = NavType.StringType }
+                            )
+                        ) { backStackEntry ->
+                            val siteId = backStackEntry.arguments?.getInt("siteId") ?: 0
+                            val siteName = java.net.URLDecoder.decode(
+                                backStackEntry.arguments?.getString("siteName") ?: "", "UTF-8"
+                            )
+                            val siteUrl = java.net.URLDecoder.decode(
+                                backStackEntry.arguments?.getString("siteUrl") ?: "", "UTF-8"
+                            )
+                            AnalysisScreen(
+                                siteId = siteId,
+                                siteName = siteName,
+                                siteUrl = siteUrl,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
-
-                MainScreen(viewModel)
             }
-        }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        // ═══ تحديث الـ intent ثم قراءة المشاركة ═══
-        setIntent(intent)
-        extractShareData(intent)
-    }
-
-    private fun extractShareData(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
-            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
-            val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
-
-            if (!text.isNullOrBlank()) {
-                sharedUrl = extractUrl(text)
-                sharedTitle = subject ?: extractDomain(sharedUrl!!)
-            }
-        }
-    }
-
-    private fun extractUrl(text: String): String {
-        val urlPattern = Regex("https?://[^\\s]+")
-        return urlPattern.find(text)?.value?.trim() ?: text.trim()
-    }
-
-    private fun extractDomain(url: String): String {
-        return try {
-            val host = java.net.URI(url).host ?: url
-            host.removePrefix("www.")
-        } catch (_: Exception) {
-            url.take(30)
         }
     }
 }
