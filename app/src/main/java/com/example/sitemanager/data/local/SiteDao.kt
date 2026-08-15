@@ -1,43 +1,75 @@
-package com.example.sitemanager.data.local
+package com.nadr59.sitemanager.data.local
 
-import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Update
+import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SiteDao {
 
-    @Query("SELECT * FROM sites WHERE tabType = 'favorites' ORDER BY clickCount DESC")
-    fun getFavorites(): Flow<List<SiteEntity>>
+    // ═══ العمليات الأساسية (موجودة مسبقًا) ═══
 
-    @Query("SELECT * FROM sites WHERE tabType = 'saved' ORDER BY createdAt DESC")
-    fun getSaved(): Flow<List<SiteEntity>>
+    @Query("SELECT * FROM sites ORDER BY category, name")
+    fun getAllSites(): Flow<List<SiteEntity>>
 
-    @Query("SELECT * FROM sites WHERE title LIKE '%' || :query || '%' OR url LIKE '%' || :query || '%' ORDER BY clickCount DESC")
-    fun search(query: String): Flow<List<SiteEntity>>
+    @Query("SELECT * FROM sites WHERE category = :category ORDER BY name")
+    fun getSitesByCategory(category: String): Flow<List<SiteEntity>>
 
-    @Query("SELECT * FROM sites WHERE url = :url LIMIT 1")
-    suspend fun getByUrl(url: String): SiteEntity?
+    @Query("SELECT DISTINCT category FROM sites ORDER BY category")
+    fun getAllCategories(): Flow<List<String>>
+
+    @Query("SELECT * FROM sites WHERE name LIKE '%' || :query || '%' OR url LIKE '%' || :query || '%' OR notes LIKE '%' || :query || '%'")
+    fun searchSites(query: String): Flow<List<SiteEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(site: SiteEntity): Long
+    suspend fun insertSite(site: SiteEntity)
 
     @Update
-    suspend fun update(site: SiteEntity)
+    suspend fun updateSite(site: SiteEntity)
 
     @Delete
-    suspend fun delete(site: SiteEntity)
+    suspend fun deleteSite(site: SiteEntity)
 
-    @Query("UPDATE sites SET tabType = :newTabType WHERE id = :id")
-    suspend fun moveToTab(id: Long, newTabType: String)
+    @Query("SELECT * FROM sites WHERE id = :id")
+    suspend fun getSiteById(id: Int): SiteEntity?
 
-    @Query("UPDATE sites SET clickCount = clickCount + 1 WHERE id = :id")
-    suspend fun incrementClickCount(id: Long)
+    @Query("SELECT * FROM sites WHERE url = :url LIMIT 1")
+    suspend fun getSiteByUrl(url: String): SiteEntity?
 
-    @Query("UPDATE sites SET title = :title WHERE id = :id")
-    suspend fun updateTitle(id: Long, title: String)
+    @Query("UPDATE sites SET visitCount = visitCount + 1 WHERE id = :id")
+    suspend fun incrementVisitCount(id: Int)
+
+    // ═══ عمليات التحليل الجديدة ═══
+
+    @Query("""
+        UPDATE sites SET
+            siteType = :siteType,
+            lastAnalyzed = :timestamp,
+            cachedOverview = :overview,
+            cachedTechStack = :techStack,
+            cachedFeatures = :features,
+            aiRating = :rating,
+            analysisCount = analysisCount + 1
+        WHERE id = :siteId
+    """)
+    suspend fun saveAnalysis(
+        siteId: Int,
+        siteType: String,
+        timestamp: Long,
+        overview: String,
+        techStack: String,
+        features: String,
+        rating: Float
+    )
+
+    @Query("SELECT * FROM sites WHERE lastAnalyzed > 0 ORDER BY lastAnalyzed DESC LIMIT 10")
+    fun getRecentlyAnalyzed(): Flow<List<SiteEntity>>
+
+    @Query("SELECT * FROM sites WHERE siteType = :type ORDER BY name")
+    fun getSitesByType(type: String): Flow<List<SiteEntity>>
+
+    @Query("UPDATE sites SET cachedOverview = '', cachedTechStack = '', cachedFeatures = '', lastAnalyzed = 0 WHERE id = :siteId")
+    suspend fun clearAnalysisCache(siteId: Int)
+
+    @Query("SELECT COUNT(*) FROM sites WHERE lastAnalyzed > 0")
+    fun getAnalyzedCount(): Flow<Int>
 }
