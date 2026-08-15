@@ -64,4 +64,12 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // ═══ جديد: خدمات التحليل ═══
+    implementation("org.jsoup:jsoup:1.17.2")
+
+    // تأكد من وجود هذه:
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.code.gson:gson:2.10.1")
+
 }
