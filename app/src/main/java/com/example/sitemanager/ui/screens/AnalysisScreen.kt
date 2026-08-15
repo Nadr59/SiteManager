@@ -1,5 +1,6 @@
 package com.nadr59.sitemanager.ui.screens
 
+import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,24 +41,29 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
+import com.google.gson.Gson
+import com.nadr59.sitemanager.data.local.SiteDatabase
 import com.nadr59.sitemanager.data.remote.AiConfig
 import com.nadr59.sitemanager.data.remote.AiService
 import com.nadr59.sitemanager.data.remote.AnalysisResult
-import com.nadr59.sitemanager.data.remote.ProsAndCons
 import com.nadr59.sitemanager.data.remote.WebScraper
 import com.nadr59.sitemanager.data.repository.AnalyzerRepository
-import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,10 +74,10 @@ fun AnalysisScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    // تهيئة الخدمات محلياً (بدون Hilt لتبسيط البناء)
     val repo = remember {
-        val db = com.nadr59.sitemanager.data.local.SiteDatabase.getDatabase(context)
+        val db = SiteDatabase.getDatabase(context)
         val dao = db.siteDao()
         val scraper = WebScraper()
         val ai = AiService(Gson())
@@ -94,22 +100,29 @@ fun AnalysisScreen(
         )
     }
 
-    fun doAnalysis(forceRefresh: Boolean = false) {
-        val config = loadConfig()
-        if (config.apiKey.isBlank()) {
-            error = "أدخل مفتاح AI من الإعدادات أولاً"
-            return
-        }
+    fun startAnalysis(forceRefresh: Boolean = false) {
+        scope.launch {
+            isLoading = true
+            error = null
+            loadingStep = ""
 
-        isLoading = true
-        error = null
-
-        kotlinx.coroutines.MainScope().launch {
             try {
-                // محاولة التخزين المؤقت أولاً (إذا لم يكن طلب تحديث)
+                val config = withContext(Dispatchers.IO) { loadConfig() }
+
+                if (config.apiKey.isBlank()) {
+                    error = "أدخل مفتاح AI من الإعدادات أولاً"
+                    isLoading = false
+                    return@launch
+                }
+
+                // محاولة التخزين المؤقت
                 if (!forceRefresh) {
-                    val cached = repo.getCachedAnalysis(siteId)
-                    val stale = repo.isAnalysisStale(siteId)
+                    val cached = withContext(Dispatchers.IO) {
+                        repo.getCachedAnalysis(siteId)
+                    }
+                    val stale = withContext(Dispatchers.IO) {
+                        repo.isAnalysisStale(siteId)
+                    }
                     if (cached != null && !stale) {
                         result = cached
                         isFromCache = true
@@ -118,11 +131,14 @@ fun AnalysisScreen(
                     }
                 }
 
-                loadingStep = "جارٍ جمع المحتوى..."
+                loadingStep = "جارٍ جمع محتوى الموقع..."
                 kotlinx.coroutines.delay(300)
                 loadingStep = "جارٍ التحليل بالذكاء الاصطناعي..."
 
-                val res = repo.analyze(siteId, config)
+                val res = withContext(Dispatchers.IO) {
+                    repo.analyze(siteId, config)
+                }
+
                 res.fold(
                     onSuccess = {
                         result = it
@@ -130,7 +146,9 @@ fun AnalysisScreen(
                         error = null
                     },
                     onFailure = { e ->
-                        val fallback = repo.getCachedAnalysis(siteId)
+                        val fallback = withContext(Dispatchers.IO) {
+                            repo.getCachedAnalysis(siteId)
+                        }
                         if (fallback != null) {
                             result = fallback
                             isFromCache = true
@@ -149,7 +167,7 @@ fun AnalysisScreen(
 
     // بدء التحليل عند فتح الشاشة
     LaunchedEffect(siteId) {
-        doAnalysis(forceRefresh = false)
+        startAnalysis(forceRefresh = false)
     }
 
     Scaffold(
@@ -172,7 +190,7 @@ fun AnalysisScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { doAnalysis(forceRefresh = true) },
+                        onClick = { startAnalysis(forceRefresh = true) },
                         enabled = !isLoading
                     ) {
                         Icon(Icons.Filled.Refresh, contentDescription = "تحديث")
@@ -234,7 +252,7 @@ fun AnalysisScreen(
                         Spacer(Modifier.height(24.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedButton(onClick = onBack) { Text("رجوع") }
-                            Button(onClick = { doAnalysis(forceRefresh = true) }) {
+                            Button(onClick = { startAnalysis(forceRefresh = true) }) {
                                 Text("إعادة المحاولة")
                             }
                         }
@@ -242,7 +260,7 @@ fun AnalysisScreen(
                 }
 
                 result != null -> {
-                    AnalysisContent(
+                    AnalysisResultContent(
                         result = result!!,
                         isFromCache = isFromCache,
                         warning = error
@@ -253,9 +271,8 @@ fun AnalysisScreen(
     }
 }
 
-// ═══ محتوى النتائج ═══
 @Composable
-private fun AnalysisContent(
+private fun AnalysisResultContent(
     result: AnalysisResult,
     isFromCache: Boolean,
     warning: String?
@@ -264,7 +281,6 @@ private fun AnalysisContent(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // تحذير
         if (isFromCache) {
             item {
                 Card(
@@ -292,7 +308,6 @@ private fun AnalysisContent(
             }
         }
 
-        // التقييم
         if (result.rating > 0f) {
             item {
                 Card(
@@ -314,11 +329,7 @@ private fun AnalysisContent(
                             fontWeight = FontWeight.Black,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Text(
-                            " / 10",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Light
-                        )
+                        Text(" / 10", fontSize = 20.sp, fontWeight = FontWeight.Light)
                         Spacer(Modifier.width(16.dp))
                         Text(
                             when {
@@ -335,7 +346,6 @@ private fun AnalysisContent(
             }
         }
 
-        // الأقسام
         if (result.overview.isNotBlank()) {
             item { AnalysisSectionCard("نظرة عامة", result.overview) }
         }
@@ -343,20 +353,16 @@ private fun AnalysisContent(
             item { AnalysisSectionCard("الغرض والهدف", result.purpose) }
         }
         if (result.features.isNotEmpty()) {
-            item {
-                AnalysisBulletCard("الميزات الرئيسية", result.features, Color(0xFF5BD9A8))
-            }
+            item { AnalysisBulletCard("الميزات", result.features, Color(0xFF5BD9A8)) }
         }
         if (result.techStack.isNotEmpty()) {
-            item {
-                AnalysisBulletCard("التقنيات المستخدمة", result.techStack, Color(0xFF5B8DD9))
-            }
+            item { AnalysisBulletCard("التقنيات", result.techStack, Color(0xFF5B8DD9)) }
         }
         if (result.howToUse.isNotBlank()) {
             item { AnalysisSectionCard("كيفية البدء", result.howToUse) }
         }
         if (result.examples.isNotBlank()) {
-            item { AnalysisCodeCard("أمثلة عملية", result.examples) }
+            item { AnalysisCodeCard("أمثلة", result.examples) }
         }
         if (result.prosAndCons.pros.isNotEmpty()) {
             item { AnalysisBulletCard("نقاط القوة", result.prosAndCons.pros, Color(0xFF4CAF50)) }
@@ -365,7 +371,6 @@ private fun AnalysisContent(
             item { AnalysisBulletCard("نقاط الضعف", result.prosAndCons.cons, Color(0xFFFF9800)) }
         }
 
-        // النص الكامل
         if (result.rawMarkdown.isNotBlank()) {
             item {
                 var expanded by remember { mutableStateOf(false) }
@@ -422,12 +427,7 @@ private fun AnalysisSectionCard(title: String, content: String) {
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 10.dp)
             )
-            Text(
-                content,
-                fontSize = 14.sp,
-                lineHeight = 24.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Text(content, fontSize = 14.sp, lineHeight = 24.sp)
         }
     }
 }
@@ -456,16 +456,9 @@ private fun AnalysisBulletCard(title: String, items: List<String>, accent: Color
                     Surface(
                         shape = CircleShape,
                         color = accent.copy(alpha = 0.15f),
-                        modifier = Modifier
-                            .padding(top = 8.dp)
-                            .size(8.dp)
+                        modifier = Modifier.padding(top = 8.dp).size(8.dp)
                     ) {}
-                    Text(
-                        item,
-                        fontSize = 14.sp,
-                        lineHeight = 22.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Text(item, fontSize = 14.sp, lineHeight = 22.sp)
                 }
             }
         }
