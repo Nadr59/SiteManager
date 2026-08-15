@@ -31,14 +31,11 @@ import java.net.URLEncoder
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    // ═══ الرابط المستلم من المشاركة ═══
     private var sharedUrl by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // ═══ معالجة intent عند التشغيل الأول ═══
         handleIntent(intent)
 
         setContent {
@@ -54,35 +51,62 @@ class MainActivity : ComponentActivity() {
                         startDestination = "home"
                     ) {
 
-                        // ═══ الشاشة الرئيسية ═══
+                        // ═══ الرئيسية ═══
                         composable("home") {
                             val viewModel: SiteViewModel = hiltViewModel()
                             HomeScreen(
                                 viewModel = viewModel,
                                 sharedUrl = sharedUrl,
                                 onSharedUrlConsumed = { sharedUrl = null },
-                                onNavigateToAdd = { navController.navigate("add") },
-                                onNavigateToSettings = { navController.navigate("settings") },
+                                onNavigateToAdd = {
+                                    navController.navigate("add")
+                                },
+                                onNavigateToAddWithUrl = { url ->
+                                    // ═══ تمرير الرابط عبر الـ route ═══
+                                    val encoded = URLEncoder.encode(url, "UTF-8")
+                                    navController.navigate("add?url=$encoded")
+                                    sharedUrl = null
+                                },
+                                onNavigateToSettings = {
+                                    navController.navigate("settings")
+                                },
                                 onNavigateToAnalysis = { siteId, name, url ->
-                                    val encodedName = URLEncoder.encode(name, "UTF-8")
-                                    val encodedUrl = URLEncoder.encode(url, "UTF-8")
-                                    navController.navigate(
-                                        "analysis/$siteId/$encodedName/$encodedUrl"
-                                    )
+                                    val encName = URLEncoder.encode(name, "UTF-8")
+                                    val encUrl = URLEncoder.encode(url, "UTF-8")
+                                    navController.navigate("analysis/$siteId/$encName/$encUrl")
                                 }
                             )
                         }
 
-                        // ═══ إضافة موقع ═══
+                        // ═══ إضافة موقع (بدون رابط) ═══
                         composable("add") {
                             val viewModel: SiteViewModel = hiltViewModel()
                             AddSiteScreen(
                                 viewModel = viewModel,
-                                initialUrl = sharedUrl,
-                                onBack = {
-                                    sharedUrl = null
-                                    navController.popBackStack()
+                                initialUrl = null,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        // ═══ إضافة موقع (مع رابط مُشارك) ═══
+                        composable(
+                            route = "add?url={sharedUrl}",
+                            arguments = listOf(
+                                navArgument("sharedUrl") {
+                                    type = NavType.StringType
+                                    defaultValue = ""
                                 }
+                            )
+                        ) { backStackEntry ->
+                            val url = URLDecoder.decode(
+                                backStackEntry.arguments?.getString("sharedUrl") ?: "",
+                                "UTF-8"
+                            )
+                            val viewModel: SiteViewModel = hiltViewModel()
+                            AddSiteScreen(
+                                viewModel = viewModel,
+                                initialUrl = url.ifBlank { null },
+                                onBack = { navController.popBackStack() }
                             )
                         }
 
@@ -93,7 +117,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ═══ شاشة التحليل ═══
+                        // ═══ التحليل ═══
                         composable(
                             route = "analysis/{siteId}/{siteName}/{siteUrl}",
                             arguments = listOf(
@@ -101,15 +125,13 @@ class MainActivity : ComponentActivity() {
                                 navArgument("siteName") { type = NavType.StringType },
                                 navArgument("siteUrl") { type = NavType.StringType }
                             )
-                        ) { backStackEntry ->
-                            val siteId = backStackEntry.arguments?.getInt("siteId") ?: 0
+                        ) { entry ->
+                            val siteId = entry.arguments?.getInt("siteId") ?: 0
                             val siteName = URLDecoder.decode(
-                                backStackEntry.arguments?.getString("siteName") ?: "",
-                                "UTF-8"
+                                entry.arguments?.getString("siteName") ?: "", "UTF-8"
                             )
                             val siteUrl = URLDecoder.decode(
-                                backStackEntry.arguments?.getString("siteUrl") ?: "",
-                                "UTF-8"
+                                entry.arguments?.getString("siteUrl") ?: "", "UTF-8"
                             )
                             AnalysisScreen(
                                 siteId = siteId,
@@ -124,7 +146,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ═══ معالجة Intent عند التشغيل الأول ═══
     private fun handleIntent(intent: Intent?) {
         when (intent?.action) {
             Intent.ACTION_SEND -> {
@@ -138,7 +159,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // ═══ معالجة Intent عند استقبال مشاركة جديدة (التطبيق مفتوح) ═══
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
