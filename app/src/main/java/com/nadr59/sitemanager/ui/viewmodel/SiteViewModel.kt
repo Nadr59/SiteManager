@@ -102,6 +102,15 @@ class SiteViewModel @Inject constructor(
             repository.deleteSite(site)
         }
     }
+    // ═══ أضف هذه الدالة ═══
+fun updateSite(site: SiteEntity) {
+    viewModelScope.launch {
+        try {
+            repository.updateSite(site)
+            loadSites()
+        } catch (_: Exception) {}
+    }
+}
 
     fun incrementVisit(id: Int) {
         viewModelScope.launch {
