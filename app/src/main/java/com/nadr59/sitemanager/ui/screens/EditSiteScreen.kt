@@ -50,8 +50,8 @@ fun EditSiteScreen(
     val state by viewModel.uiState.collectAsState()
 
     // البحث عن الموقع في القائمة
-    val site = state.sites.find { it.id == siteId }
-
+    
+val site = state.allSites.find { it.id == siteId }
     // حقول التعديل
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
