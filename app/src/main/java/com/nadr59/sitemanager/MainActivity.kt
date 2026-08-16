@@ -20,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nadr59.sitemanager.ui.screens.AddSiteScreen
 import com.nadr59.sitemanager.ui.screens.AnalysisScreen
+import com.nadr59.sitemanager.ui.screens.EditSiteScreen
 import com.nadr59.sitemanager.ui.screens.HomeScreen
 import com.nadr59.sitemanager.ui.screens.SettingsScreen
 import com.nadr59.sitemanager.ui.theme.SiteManagerTheme
@@ -62,7 +63,6 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("add")
                                 },
                                 onNavigateToAddWithUrl = { url ->
-                                    // ═══ تمرير الرابط عبر الـ route ═══
                                     val encoded = URLEncoder.encode(url, "UTF-8")
                                     navController.navigate("add?url=$encoded")
                                     sharedUrl = null
@@ -73,7 +73,12 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToAnalysis = { siteId, name, url ->
                                     val encName = URLEncoder.encode(name, "UTF-8")
                                     val encUrl = URLEncoder.encode(url, "UTF-8")
-                                    navController.navigate("analysis/$siteId/$encName/$encUrl")
+                                    navController.navigate(
+                                        "analysis/$siteId/$encName/$encUrl"
+                                    )
+                                },
+                                onNavigateToEdit = { siteId ->
+                                    navController.navigate("edit/$siteId")
                                 }
                             )
                         }
@@ -110,6 +115,24 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
+                        // ═══ تعديل موقع ═══
+                        composable(
+                            route = "edit/{siteId}",
+                            arguments = listOf(
+                                navArgument("siteId") {
+                                    type = NavType.IntType
+                                }
+                            )
+                        ) { backStackEntry ->
+                            val siteId = backStackEntry.arguments?.getInt("siteId") ?: 0
+                            val viewModel: SiteViewModel = hiltViewModel()
+                            EditSiteScreen(
+                                viewModel = viewModel,
+                                siteId = siteId,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
                         // ═══ الإعدادات ═══
                         composable("settings") {
                             SettingsScreen(
@@ -128,10 +151,12 @@ class MainActivity : ComponentActivity() {
                         ) { entry ->
                             val siteId = entry.arguments?.getInt("siteId") ?: 0
                             val siteName = URLDecoder.decode(
-                                entry.arguments?.getString("siteName") ?: "", "UTF-8"
+                                entry.arguments?.getString("siteName") ?: "",
+                                "UTF-8"
                             )
                             val siteUrl = URLDecoder.decode(
-                                entry.arguments?.getString("siteUrl") ?: "", "UTF-8"
+                                entry.arguments?.getString("siteUrl") ?: "",
+                                "UTF-8"
                             )
                             AnalysisScreen(
                                 siteId = siteId,
