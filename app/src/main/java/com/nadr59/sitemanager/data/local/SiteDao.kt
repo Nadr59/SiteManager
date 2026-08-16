@@ -34,6 +34,9 @@ interface SiteDao {
 
     @Update
     suspend fun updateSite(site: SiteEntity)
+    // ═══ أضف هذا في DAO ═══
+@Update
+suspend fun updateSite(site: SiteEntity)
 
     @Delete
     suspend fun deleteSite(site: SiteEntity)
