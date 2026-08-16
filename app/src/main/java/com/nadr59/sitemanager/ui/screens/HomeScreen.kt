@@ -1,5 +1,7 @@
 package com.nadr59.sitemanager.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -15,17 +17,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,6 +56,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,13 +72,15 @@ fun HomeScreen(
     sharedUrl: String?,
     onSharedUrlConsumed: () -> Unit,
     onNavigateToAdd: () -> Unit,
-    onNavigateToAddWithUrl: (String) -> Unit,   // ← جديد
+    onNavigateToAddWithUrl: (String) -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToAnalysis: (Int, String, String) -> Unit
+    onNavigateToAnalysis: (Int, String, String) -> Unit,
+    onNavigateToEdit: (Int) -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var siteToDelete by remember { mutableStateOf<SiteEntity?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // ═══ معالجة الرابط المُشارك ═══
     LaunchedEffect(sharedUrl) {
@@ -88,7 +92,6 @@ fun HomeScreen(
             )
             when (result) {
                 SnackbarResult.ActionPerformed -> {
-                    // ═══ تمرير الرابط مباشرة للشاشة ═══
                     onNavigateToAddWithUrl(sharedUrl)
                 }
                 SnackbarResult.Dismissed -> {
@@ -111,7 +114,10 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(onClick = onNavigateToSettings) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "الإعدادات")
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "الإعدادات"
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -124,7 +130,7 @@ fun HomeScreen(
                 onClick = onNavigateToAdd,
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(Icons.Filled.Add, contentDescription = "إضافة موقع")
+                Icon(Icons.Default.Add, contentDescription = "إضافة موقع")
             }
         }
     ) { padding ->
@@ -143,12 +149,14 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("البحث في المواقع...") },
                     leadingIcon = {
-                        Icon(Icons.Outlined.Search, contentDescription = null)
+                        Icon(Icons.Default.Search, contentDescription = null)
                     },
                     trailingIcon = {
                         if (state.searchQuery.isNotBlank()) {
-                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                Icon(Icons.Filled.Clear, contentDescription = "مسح")
+                            IconButton(
+                                onClick = { viewModel.updateSearchQuery("") }
+                            ) {
+                                Icon(Icons.Default.Clear, contentDescription = "مسح")
                             }
                         }
                     },
@@ -159,8 +167,11 @@ fun HomeScreen(
 
             // فلاتر التصنيفات
             item {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val allCategories = listOf("الكل") + state.categories
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val allCategories =
+                        listOf("الكل") + state.categories
                     items(allCategories) { category ->
                         FilterChip(
                             selected = state.selectedCategory == category,
@@ -189,9 +200,24 @@ fun HomeScreen(
             ) { site ->
                 SiteCard(
                     site = site,
-                    onVisit = { viewModel.incrementVisit(site.id) },
-                    onAnalyze = { onNavigateToAnalysis(site.id, site.name, site.url) },
-                    onEdit = { },
+                    onVisit = {
+                        // ✅ فتح الرابط في المتصفح + تسجيل الزيارة
+                        viewModel.incrementVisit(site.id)
+                        try {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(site.url)
+                            )
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    },
+                    onAnalyze = {
+                        onNavigateToAnalysis(site.id, site.name, site.url)
+                    },
+                    onEdit = {
+                        // ✅ فتح شاشة التعديل
+                        onNavigateToEdit(site.id)
+                    },
                     onDelete = { siteToDelete = site }
                 )
             }
@@ -207,7 +233,11 @@ fun HomeScreen(
                     ) {
                         Text("\uD83C\uDF10", fontSize = 48.sp)
                         Spacer(Modifier.height(16.dp))
-                        Text("لا توجد مواقع", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(
+                            "لا توجد مواقع",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
                         Text(
                             "اضغط + لإضافة موقعك الأول",
                             fontSize = 14.sp,
@@ -224,13 +254,18 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = { siteToDelete = null },
             title = { Text("حذف الموقع") },
-            text = { Text("هل أنت متأكد من حذف \"${site.name}\"؟") },
+            text = {
+                Text("هل أنت متأكد من حذف \"${site.name}\"؟")
+            },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteSite(site)
                     siteToDelete = null
                 }) {
-                    Text("حذف", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        "حذف",
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             },
             dismissButton = {
@@ -289,7 +324,10 @@ fun SiteCard(
                 ) {
                     Text(
                         site.category,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(
+                            horizontal = 10.dp,
+                            vertical = 4.dp
+                        ),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -312,7 +350,9 @@ fun SiteCard(
                 Spacer(Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(
+                        alpha = 0.5f
+                    )
                 ) {
                     Row(
                         modifier = Modifier.padding(10.dp),
@@ -338,11 +378,16 @@ fun SiteCard(
                         if (site.aiRating > 0f) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                color = MaterialTheme.colorScheme.primary.copy(
+                                    alpha = 0.1f
+                                )
                             ) {
                                 Text(
                                     " ${String.format("%.0f", site.aiRating)}/10 ",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.padding(
+                                        horizontal = 8.dp,
+                                        vertical = 4.dp
+                                    ),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -359,16 +404,22 @@ fun SiteCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // ✅ زر الزيارة — يعمل الآن
                 FilledTonalButton(
                     onClick = onVisit,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Icon(Icons.Outlined.Language, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(
+                        Icons.Default.Language,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
                     Spacer(Modifier.width(4.dp))
                     Text("زيارة", fontSize = 13.sp)
                 }
 
+                // زر الشرح
                 Surface(
                     onClick = onAnalyze,
                     modifier = Modifier.weight(1f),
@@ -377,22 +428,51 @@ fun SiteCard(
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier.padding(
+                            horizontal = 16.dp,
+                            vertical = 12.dp
+                        ),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
                         Spacer(Modifier.width(4.dp))
-                        Text("شرح", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "شرح",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
-                IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Outlined.Edit, contentDescription = "تعديل", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                // ✅ زر التعديل — يعمل الآن
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "تعديل",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
-                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
-                    Icon(Icons.Filled.Delete, contentDescription = "حذف", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                // زر الحذف
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "حذف",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
