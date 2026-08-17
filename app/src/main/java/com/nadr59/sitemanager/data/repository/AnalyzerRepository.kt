@@ -40,13 +40,16 @@ class AnalyzerRepository @Inject constructor(
                 )
             )
 
-            // تحديث الموقع
+            // ✅ تحديث فحص الموقع مع time
             dao.updateCheckResult(
                 id = siteId,
+                time = System.currentTimeMillis(),
                 status = content.statusCode,
                 title = content.title ?: "",
                 desc = content.description ?: ""
             )
+
+            // تحديث بيانات الموقع
             dao.updateSite(
                 site.copy(
                     lastAnalyzed = System.currentTimeMillis(),
@@ -91,16 +94,33 @@ class AnalyzerRepository @Inject constructor(
         return try {
             val content = scraper.checkUrl(site.url)
             if (content != null) {
+                // ✅ تحديث فحص الموقع مع time
                 dao.updateCheckResult(
                     id = siteId,
+                    time = System.currentTimeMillis(),
                     status = content.statusCode,
                     title = content.title ?: "",
                     desc = content.description ?: ""
                 )
                 true
-            } else false
+            } else {
+                false
+            }
         } catch (_: Exception) {
             false
         }
+    }
+
+    // ✅ مسح ذاكرة التخزين المؤقت
+    suspend fun clearCache(siteId: Int) {
+        dao.deleteAnalysesForSite(siteId)
+        val site = dao.getSiteById(siteId) ?: return
+        dao.updateSite(
+            site.copy(
+                cachedOverview = "",
+                aiRating = 0f,
+                lastAnalyzed = 0L
+            )
+        )
     }
 }
