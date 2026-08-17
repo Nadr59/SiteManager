@@ -21,23 +21,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # ═══ توليد Gradle Wrapper من الصفر ═══
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
       - name: Generate Gradle Wrapper
         run: |
-          if [ ! -f "./gradlew" ]; then
-            echo "gradlew not found — generating wrapper..."
-            gradle wrapper --gradle-version 8.7
-          fi
-          chmod +x ./gradlew
-
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
+          ls -la gradlew
+          ls -la gradle/wrapper/
 
       - name: Build Debug APK
         run: |
@@ -61,3 +56,13 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      # ═══ حفظ الـ Wrapper في المستودع (اختياري) ═══
+      - name: Commit wrapper (optional)
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gradlew gradlew.bat gradle/wrapper/
+          git diff --staged --quiet || git commit -m "Add Gradle wrapper"
+          git push || true
