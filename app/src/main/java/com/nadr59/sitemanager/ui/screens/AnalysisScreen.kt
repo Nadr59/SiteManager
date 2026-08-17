@@ -2,9 +2,6 @@ package com.nadr59.sitemanager.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -43,7 +40,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,11 +55,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nadr59.sitemanager.data.local.AnalysisType
 import com.nadr59.sitemanager.data.remote.AnalysisResult
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -74,7 +68,7 @@ fun AnalysisScreen(
     siteUrl: String,
     analysisTypeKey: String = "explain",
     onBack: () -> Unit,
-    viewModel: SiteViewModel = viewModel()
+    viewModel: SiteViewModel
 ) {
     val analysisType = AnalysisType.fromKey(analysisTypeKey)
     val context = LocalContext.current
@@ -155,9 +149,10 @@ fun AnalysisScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(siteUrl))
                             try {
-                                context.startActivity(intent)
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(siteUrl))
+                                )
                             } catch (_: Exception) {}
                         }
                     ) {
@@ -268,7 +263,11 @@ fun AnalysisScreen(
             }
 
             // ═══ زر بدء التحليل (لأنواع غير CUSTOM) ═══
-            if (analysisType != AnalysisType.CUSTOM && result == null && !isLoading && !hasStarted) {
+            if (analysisType != AnalysisType.CUSTOM &&
+                result == null &&
+                !isLoading &&
+                !hasStarted
+            ) {
                 item {
                     Card(
                         shape = RoundedCornerShape(14.dp),
@@ -308,10 +307,7 @@ fun AnalysisScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "بدء التحليل",
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text("بدء التحليل", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -390,7 +386,7 @@ fun AnalysisScreen(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                error!!,
+                                error ?: "",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onErrorContainer.copy(
                                     alpha = 0.8f
@@ -419,14 +415,12 @@ fun AnalysisScreen(
 
             // ═══ عرض النتائج ═══
             result?.let { r ->
-                // ═══ التقييم ═══
+                // التقييم
                 if (r.rating > 0f) {
-                    item {
-                        RatingCard(rating = r.rating)
-                    }
+                    item { RatingCard(rating = r.rating) }
                 }
 
-                // ═══ النظرة العامة ═══
+                // النظرة العامة
                 if (r.overview.isNotBlank()) {
                     item {
                         AnalysisSection(
@@ -437,7 +431,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ الغرض ═══
+                // الغرض
                 if (r.purpose.isNotBlank()) {
                     item {
                         AnalysisSection(
@@ -448,7 +442,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ الميزات ═══
+                // الميزات
                 if (r.features.isNotEmpty()) {
                     item {
                         AnalysisListSection(
@@ -459,7 +453,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ التقنيات ═══
+                // التقنيات
                 if (r.techStack.isNotEmpty()) {
                     item {
                         AnalysisListSection(
@@ -470,7 +464,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ طريقة الاستخدام ═══
+                // طريقة الاستخدام
                 if (r.howToUse.isNotBlank()) {
                     item {
                         AnalysisSection(
@@ -481,7 +475,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ الأمثلة ═══
+                // الأمثلة
                 if (r.examples.isNotBlank()) {
                     item {
                         AnalysisSection(
@@ -492,7 +486,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ الإيجابيات ═══
+                // الإيجابيات
                 if (r.prosAndCons.pros.isNotEmpty()) {
                     item {
                         ProsConsCard(
@@ -504,7 +498,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ السلبيات ═══
+                // السلبيات
                 if (r.prosAndCons.cons.isNotEmpty()) {
                     item {
                         ProsConsCard(
@@ -516,7 +510,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ النص الكامل (Markdown) ═══
+                // النص الكامل عند عدم وجود أقسام
                 if (r.rawMarkdown.isNotBlank() &&
                     r.overview.isBlank() &&
                     r.purpose.isBlank()
@@ -530,7 +524,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ أزرار إضافية ═══
+                // أزرار إضافية
                 item {
                     Spacer(Modifier.height(8.dp))
                     Row(
@@ -556,7 +550,7 @@ fun AnalysisScreen(
                                     type = "text/plain"
                                     putExtra(
                                         Intent.EXTRA_TEXT,
-                                        "تحليل ${analysisType.displayName} لموقع: $siteName\n$url\n\n${r.rawMarkdown}"
+                                        "تحليل ${analysisType.displayName} لموقع: $siteName\n$siteUrl\n\n${r.rawMarkdown}"
                                     )
                                 }
                                 context.startActivity(
@@ -571,7 +565,7 @@ fun AnalysisScreen(
                     }
                 }
 
-                // ═══ أنواع تحليل أخرى ═══
+                // ═══ تحليلات أخرى ═══
                 item {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -584,12 +578,14 @@ fun AnalysisScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        AnalysisType.entries.filter { it != analysisType && it != AnalysisType.CUSTOM }
+                        AnalysisType.entries
+                            .filter { it != analysisType }
                             .forEach { type ->
                                 Surface(
                                     onClick = {
-                                        val intent = Intent(context, context::class.java)
-                                        // يتم التعامل عبر Navigation بدلاً من ذلك
+                                        startAnalysis(
+                                            if (type == AnalysisType.CUSTOM) customQuestion else ""
+                                        )
                                     },
                                     shape = RoundedCornerShape(10.dp),
                                     color = MaterialTheme.colorScheme.surfaceVariant
@@ -677,7 +673,10 @@ private fun RatingCard(rating: Float) {
             ) {
                 Text(
                     label,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(
+                        horizontal = 12.dp,
+                        vertical = 4.dp
+                    ),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = color
@@ -704,11 +703,7 @@ private fun AnalysisSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(emoji, fontSize = 18.sp)
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
             Spacer(Modifier.height(10.dp))
             Text(
@@ -738,11 +733,7 @@ private fun AnalysisListSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(emoji, fontSize = 18.sp)
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
             Spacer(Modifier.height(10.dp))
             items.forEachIndexed { index, item ->
