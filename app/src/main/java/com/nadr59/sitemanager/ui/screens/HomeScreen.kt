@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
 import com.nadr59.sitemanager.viewmodel.SortOption
+import androidx.compose.foundation.layout.Box
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
