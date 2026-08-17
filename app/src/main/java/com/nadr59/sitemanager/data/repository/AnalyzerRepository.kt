@@ -1,5 +1,7 @@
 package com.nadr59.sitemanager.data.repository
 
+import com.nadr59.sitemanager.data.local.AnalysisType
+import com.nadr59.sitemanager.data.local.SiteAnalysisEntity
 import com.nadr59.sitemanager.data.local.SiteDao
 import com.nadr59.sitemanager.data.remote.AiConfig
 import com.nadr59.sitemanager.data.remote.AiService
@@ -10,53 +12,95 @@ import javax.inject.Singleton
 
 @Singleton
 class AnalyzerRepository @Inject constructor(
-    private val webScraper: WebScraper,
-    private val aiService: AiService,
-    private val siteDao: SiteDao
+    private val scraper: WebScraper,
+    private val ai: AiService,
+    private val dao: SiteDao
 ) {
-    suspend fun analyze(siteId: Int, config: AiConfig): Result<AnalysisResult> {
+    suspend fun analyze(
+        siteId: Int,
+        config: AiConfig,
+        analysisType: AnalysisType = AnalysisType.EXPLAIN,
+        customQuestion: String = "",
+        forceRefresh: Boolean = false
+    ): Result<AnalysisResult> {
         return try {
-            val site = siteDao.getSiteById(siteId)
+            val site = dao.getSiteById(siteId)
                 ?: return Result.failure(Exception("الموقع غير موجود"))
 
-            val content = webScraper.scrape(site.url)
-            val result = aiService.analyzeSite(content, config)
+            val content = scraper.scrape(site.url)
+            val result = ai.analyzeSite(content, config, analysisType, customQuestion)
 
-            siteDao.saveAnalysis(
-                siteId = siteId,
-                siteType = content.type.name,
-                timestamp = System.currentTimeMillis(),
-                overview = result.toCachedOverview(),
-                techStack = result.toCachedTechStack(),
-                features = result.toCachedFeatures(),
-                rating = result.rating
+            // حفظ التحليل
+            dao.insertAnalysis(
+                SiteAnalysisEntity(
+                    siteId = siteId,
+                    analysisType = analysisType.key,
+                    result = result.rawMarkdown,
+                    rating = result.rating
+                )
+            )
+
+            // تحديث الموقع
+            dao.updateCheckResult(
+                id = siteId,
+                status = content.statusCode,
+                title = content.title ?: "",
+                desc = content.description ?: ""
+            )
+            dao.updateSite(
+                site.copy(
+                    lastAnalyzed = System.currentTimeMillis(),
+                    cachedOverview = result.overview,
+                    aiRating = result.rating,
+                    pageTitle = content.title ?: "",
+                    pageDescription = content.description ?: "",
+                    lastChecked = System.currentTimeMillis(),
+                    httpStatus = content.statusCode,
+                    description = content.description ?: ""
+                )
             )
 
             Result.success(result)
         } catch (e: Exception) {
-            Result.failure(Exception("خطأ في التحليل: ${e.message}"))
+            Result.failure(e)
         }
     }
 
     suspend fun getCachedAnalysis(siteId: Int): AnalysisResult? {
-        val site = siteDao.getSiteById(siteId) ?: return null
-        if (site.lastAnalyzed == 0L || site.cachedOverview.isBlank()) return null
-        return AnalysisResult.fromCache(
-            overview = site.cachedOverview,
-            techStack = site.cachedTechStack,
-            features = site.cachedFeatures,
-            rating = site.aiRating
+        val entity = dao.getLatestAnalysisAny(siteId) ?: return null
+        return AnalysisResult(
+            overview = entity.result.take(500),
+            rawMarkdown = entity.result,
+            rating = entity.rating,
+            analysisType = entity.analysisType
         )
     }
 
-    suspend fun isAnalysisStale(siteId: Int): Boolean {
-        val site = siteDao.getSiteById(siteId) ?: return true
-        if (site.lastAnalyzed == 0L) return true
-        val dayMs = 24 * 60 * 60 * 1000
-        return (System.currentTimeMillis() - site.lastAnalyzed) > dayMs
+    suspend fun getCachedAnalysis(siteId: Int, type: AnalysisType): AnalysisResult? {
+        val entity = dao.getLatestAnalysis(siteId, type.key) ?: return null
+        return AnalysisResult(
+            overview = entity.result.take(500),
+            rawMarkdown = entity.result,
+            rating = entity.rating,
+            analysisType = entity.analysisType
+        )
     }
 
-    suspend fun clearCache(siteId: Int) {
-        siteDao.clearAnalysisCache(siteId)
+    suspend fun checkSiteStatus(siteId: Int): Boolean {
+        val site = dao.getSiteById(siteId) ?: return false
+        return try {
+            val content = scraper.checkUrl(site.url)
+            if (content != null) {
+                dao.updateCheckResult(
+                    id = siteId,
+                    status = content.statusCode,
+                    title = content.title ?: "",
+                    desc = content.description ?: ""
+                )
+                true
+            } else false
+        } catch (_: Exception) {
+            false
+        }
     }
 }
