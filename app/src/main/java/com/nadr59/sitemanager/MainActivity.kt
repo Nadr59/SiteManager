@@ -147,34 +147,34 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // ═══ التحليل (مع نوع التحليل) ═══
-                        composable(
-                            route = "analysis/{siteId}/{siteName}/{siteUrl}/{analysisType}",
-                            arguments = listOf(
-                                navArgument("siteId") { type = NavType.IntType },
-                                navArgument("siteName") { type = NavType.StringType },
-                                navArgument("siteUrl") { type = NavType.StringType },
-                                navArgument("analysisType") { type = NavType.StringType }
-                            )
-                        ) { entry ->
-                            val siteId = entry.arguments?.getInt("siteId") ?: 0
-                            val siteName = URLDecoder.decode(
-                                entry.arguments?.getString("siteName") ?: "", "UTF-8"
-                            )
-                            val siteUrl = URLDecoder.decode(
-                                entry.arguments?.getString("siteUrl") ?: "", "UTF-8"
-                            )
-                            val analysisType = entry.arguments?.getString("analysisType") ?: "explain"
-                            AnalysisScreen(
-                                siteId = siteId,
-                                siteName = siteName,
-                                siteUrl = siteUrl,
-                                analysisTypeKey = analysisType,
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                    }
-                }
-            }
+                        
+composable(
+    route = "analysis/{siteId}/{siteName}/{siteUrl}/{analysisType}",
+    arguments = listOf(
+        navArgument("siteId") { type = NavType.IntType },
+        navArgument("siteName") { type = NavType.StringType },
+        navArgument("siteUrl") { type = NavType.StringType },
+        navArgument("analysisType") { type = NavType.StringType }
+    )
+) { entry ->
+    val siteId = entry.arguments?.getInt("siteId") ?: 0
+    val siteName = URLDecoder.decode(
+        entry.arguments?.getString("siteName") ?: "", "UTF-8"
+    )
+    val siteUrl = URLDecoder.decode(
+        entry.arguments?.getString("siteUrl") ?: "", "UTF-8"
+    )
+    val analysisType = entry.arguments?.getString("analysisType") ?: "explain"
+    val vm: SiteViewModel = hiltViewModel()
+    AnalysisScreen(
+        viewModel = vm,
+        siteId = siteId,
+        siteName = siteName,
+        siteUrl = siteUrl,
+        analysisTypeKey = analysisType,
+        onBack = { navController.popBackStack() }
+    )
+}
         }
     }
 
