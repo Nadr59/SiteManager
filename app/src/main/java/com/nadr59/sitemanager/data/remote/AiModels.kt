@@ -1,25 +1,5 @@
 package com.nadr59.sitemanager.data.remote
 
-data class SiteContent(
-    val url: String,
-    val title: String = "",
-    val description: String = "",
-    val type: SiteType = SiteType.WEBSITE,
-    val rawContent: String = "",
-    val metadata: Map<String, String> = emptyMap()
-)
-
-enum class SiteType(val label: String, val icon: String) {
-    GITHUB_REPO("مستودع GitHub", "🐙"),
-    GITHUB_PROFILE("ملف GitHub", "👤"),
-    WEBSITE("موقع ويب", "🌐"),
-    API_DOCS("وثائق API", "📡"),
-    BLOG("مدونة", "📝"),
-    DOCUMENTATION("وثائق", "📚"),
-    PACKAGE("حزمة/مكتبة", "📦"),
-    UNKNOWN("غير معروف", "❓")
-}
-
 data class AnalysisResult(
     val overview: String = "",
     val purpose: String = "",
@@ -29,35 +9,9 @@ data class AnalysisResult(
     val examples: String = "",
     val prosAndCons: ProsAndCons = ProsAndCons(),
     val rating: Float = 0f,
-    val rawMarkdown: String = ""
-) {
-    fun toCachedOverview(): String = buildString {
-        appendLine(overview)
-        if (purpose.isNotBlank()) appendLine("\n$purpose")
-    }.trim()
-
-    fun toCachedTechStack(): String = techStack.joinToString(",")
-
-    fun toCachedFeatures(): String = features.joinToString("|")
-
-    companion object {
-        fun fromCache(
-            overview: String,
-            techStack: String,
-            features: String,
-            rating: Float
-        ): AnalysisResult {
-            return AnalysisResult(
-                overview = overview,
-                techStack = if (techStack.isBlank()) emptyList()
-                    else techStack.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                features = if (features.isBlank()) emptyList()
-                    else features.split("|").map { it.trim() }.filter { it.isNotBlank() },
-                rating = rating
-            )
-        }
-    }
-}
+    val rawMarkdown: String = "",
+    val analysisType: String = "explain"
+)
 
 data class ProsAndCons(
     val pros: List<String> = emptyList(),
