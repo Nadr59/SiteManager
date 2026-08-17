@@ -40,6 +40,12 @@ android {
     buildFeatures {
         compose = true
     }
+kotlinOptions {
+        freeCompilerArgs += listOf(
+            "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        )
+    }
 }
 
 dependencies {
