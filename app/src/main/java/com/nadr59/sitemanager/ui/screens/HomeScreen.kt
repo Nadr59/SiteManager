@@ -1,10 +1,15 @@
 package com.nadr59.sitemanager.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,17 +26,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -50,6 +64,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,9 +76,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
+import com.nadr59.sitemanager.viewmodel.SortOption
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -75,14 +90,17 @@ fun HomeScreen(
     onNavigateToAddWithUrl: (String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToAnalysis: (Int, String, String) -> Unit,
-    onNavigateToEdit: (Int) -> Unit
+    onNavigateToEdit: (Int) -> Unit,
+    onNavigateToDetail: (Int) -> Unit,
+    onNavigateToDashboard: () -> Unit
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var siteToDelete by remember { mutableStateOf<SiteEntity?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    var siteToDelete by remember { mutableStateOf<SiteEntity?>(null) }
+    var showSortMenu by remember { mutableStateOf(false) }
 
-    // ═══ معالجة الرابط المُشارك ═══
+    // معالجة الرابط المُشارك
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank()) {
             val result = snackbarHostState.showSnackbar(
@@ -91,12 +109,8 @@ fun HomeScreen(
                 duration = SnackbarDuration.Long
             )
             when (result) {
-                SnackbarResult.ActionPerformed -> {
-                    onNavigateToAddWithUrl(sharedUrl)
-                }
-                SnackbarResult.Dismissed -> {
-                    onSharedUrlConsumed()
-                }
+                SnackbarResult.ActionPerformed -> onNavigateToAddWithUrl(sharedUrl)
+                SnackbarResult.Dismissed -> onSharedUrlConsumed()
             }
         }
     }
@@ -106,18 +120,53 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "مدير المواقع",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 22.sp
-                    )
+                    Text("مدير المواقع", fontWeight = FontWeight.Black, fontSize = 22.sp)
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToSettings) {
+                    // المفضلة
+                    IconButton(onClick = { viewModel.toggleFavoritesOnly() }) {
                         Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "الإعدادات"
+                            if (state.showFavoritesOnly) Icons.Default.Favorite
+                            else Icons.Default.FavoriteBorder,
+                            contentDescription = "المفضلة",
+                            tint = if (state.showFavoritesOnly)
+                                MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurface
                         )
+                    }
+                    // Dashboard
+                    IconButton(onClick = onNavigateToDashboard) {
+                        Icon(Icons.Default.BarChart, contentDescription = "إحصائيات")
+                    }
+                    // الفرز
+                    Box {
+                        IconButton(onClick = { showSortMenu = true }) {
+                            Icon(Icons.Default.Sort, contentDescription = "فرز")
+                        }
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
+                        ) {
+                            SortOption.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            option.label,
+                                            fontWeight = if (state.sortOption == option)
+                                                FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.setSortOption(option)
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    // الإعدادات
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "الإعدادات")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -147,16 +196,12 @@ fun HomeScreen(
                     value = state.searchQuery,
                     onValueChange = { viewModel.updateSearchQuery(it) },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("البحث في المواقع...") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null)
-                    },
+                    placeholder = { Text("البحث الذكي...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
                     trailingIcon = {
                         if (state.searchQuery.isNotBlank()) {
-                            IconButton(
-                                onClick = { viewModel.updateSearchQuery("") }
-                            ) {
-                                Icon(Icons.Default.Clear, contentDescription = "مسح")
+                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                Icon(Icons.Default.Clear, "مسح")
                             }
                         }
                     },
@@ -167,16 +212,13 @@ fun HomeScreen(
 
             // فلاتر التصنيفات
             item {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val allCategories =
-                        listOf("الكل") + state.categories
-                    items(allCategories) { category ->
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val allCats = listOf("الكل") + state.categories
+                    items(allCats) { cat ->
                         FilterChip(
-                            selected = state.selectedCategory == category,
-                            onClick = { viewModel.selectCategory(category) },
-                            label = { Text(category, fontSize = 13.sp) },
+                            selected = state.selectedCategory == cat,
+                            onClick = { viewModel.selectCategory(cat) },
+                            label = { Text(cat, fontSize = 13.sp) },
                             shape = RoundedCornerShape(10.dp)
                         )
                     }
@@ -188,37 +230,40 @@ fun HomeScreen(
                 Text(
                     "${state.filteredSites.size} موقع",
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             // قائمة المواقع
-            items(
-                items = state.filteredSites,
-                key = { it.id }
-            ) { site ->
-                SiteCard(
+            items(items = state.filteredSites, key = { it.id }) { site ->
+                SiteCardEnhanced(
                     site = site,
                     onVisit = {
-                        // ✅ فتح الرابط في المتصفح + تسجيل الزيارة
                         viewModel.incrementVisit(site.id)
                         try {
-                            val intent = Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(site.url)
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(site.url))
                             )
-                            context.startActivity(intent)
                         } catch (_: Exception) {}
                     },
-                    onAnalyze = {
-                        onNavigateToAnalysis(site.id, site.name, site.url)
+                    onAnalyze = { onNavigateToAnalysis(site.id, site.name, site.url) },
+                    onEdit = { onNavigateToEdit(site.id) },
+                    onDelete = { siteToDelete = site },
+                    onFavorite = { viewModel.toggleFavorite(site.id, site.isFavorite) },
+                    onPin = { viewModel.togglePinned(site.id, site.isPinned) },
+                    onCopy = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("url", site.url))
+                        Toast.makeText(context, "تم النسخ", Toast.LENGTH_SHORT).show()
                     },
-                    onEdit = {
-                        // ✅ فتح شاشة التعديل
-                        onNavigateToEdit(site.id)
+                    onShare = {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "${site.name}\n${site.url}")
+                        }
+                        context.startActivity(Intent.createChooser(intent, "مشاركة"))
                     },
-                    onDelete = { siteToDelete = site }
+                    onClick = { onNavigateToDetail(site.id) }
                 )
             }
 
@@ -234,14 +279,10 @@ fun HomeScreen(
                         Text("\uD83C\uDF10", fontSize = 48.sp)
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "لا توجد مواقع",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                        Text(
-                            "اضغط + لإضافة موقعك الأول",
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            if (state.showFavoritesOnly) "لا توجد مفضلات"
+                            else if (state.searchQuery.isNotBlank()) "لا توجد نتائج"
+                            else "لا توجد مواقع",
+                            fontWeight = FontWeight.Bold, fontSize = 18.sp
                         )
                     }
                 }
@@ -254,41 +295,40 @@ fun HomeScreen(
         AlertDialog(
             onDismissRequest = { siteToDelete = null },
             title = { Text("حذف الموقع") },
-            text = {
-                Text("هل أنت متأكد من حذف \"${site.name}\"؟")
-            },
+            text = { Text("هل أنت متأكد من حذف \"${site.name}\"؟") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteSite(site)
                     siteToDelete = null
-                }) {
-                    Text(
-                        "حذف",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
+                }) { Text("حذف", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { siteToDelete = null }) {
-                    Text("إلغاء")
-                }
+                TextButton(onClick = { siteToDelete = null }) { Text("إلغاء") }
             }
         )
     }
 }
 
 // ═══════════════════════════════════════════════════════════
-// ═══ SiteCard ═══
+// بطاقة الموقع المحسّنة
 // ═══════════════════════════════════════════════════════════
 @Composable
-fun SiteCard(
+fun SiteCardEnhanced(
     site: SiteEntity,
     onVisit: () -> Unit,
     onAnalyze: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onFavorite: () -> Unit,
+    onPin: () -> Unit,
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onClick: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -297,19 +337,31 @@ fun SiteCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // الصف الأول
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        site.name,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (site.isPinned) {
+                            Icon(
+                                Icons.Default.PushPin,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(4.dp))
+                        }
+                        Text(
+                            site.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Text(
                         site.url,
                         fontSize = 12.sp,
@@ -318,76 +370,110 @@ fun SiteCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        site.category,
-                        modifier = Modifier.padding(
-                            horizontal = 10.dp,
-                            vertical = 4.dp
-                        ),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+
+                Row {
+                    // المفضلة
+                    IconButton(onClick = onFavorite, modifier = Modifier.size(32.dp)) {
+                        Icon(
+                            if (site.isFavorite) Icons.Default.Favorite
+                            else Icons.Default.FavoriteBorder,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (site.isFavorite) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // القائمة
+                    Box {
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("تثبيت") },
+                                leadingIcon = { Icon(Icons.Default.PushPin, null, Modifier.size(18.dp)) },
+                                onClick = { onPin(); showMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("نسخ الرابط") },
+                                leadingIcon = { Icon(Icons.Default.ContentCopy, null, Modifier.size(18.dp)) },
+                                onClick = { onCopy(); showMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("مشاركة") },
+                                leadingIcon = { Icon(Icons.Default.Share, null, Modifier.size(18.dp)) },
+                                onClick = { onShare(); showMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("تعديل") },
+                                leadingIcon = { Icon(Icons.Default.Edit, null, Modifier.size(18.dp)) },
+                                onClick = { onEdit(); showMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("حذف", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Default.Delete, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error) },
+                                onClick = { onDelete(); showMenu = false }
+                            )
+                        }
+                    }
                 }
             }
 
-            if (site.notes.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    site.notes,
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            if (site.cachedOverview.isNotBlank()) {
-                Spacer(Modifier.height(10.dp))
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(
-                        alpha = 0.5f
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
+            // الوسوم
+            if (site.tags.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    site.tags.split(",").filter { it.isNotBlank() }.take(5).forEach { tag ->
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
                             Text(
-                                "آخر تحليل",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                site.cachedOverview.take(100) +
-                                    if (site.cachedOverview.length > 100) "..." else "",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                lineHeight = 16.sp
+                                tag.trim(),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         }
+                    }
+                }
+            }
+
+            // معاينة التحليل
+            if (site.cachedOverview.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ) {
+                    Row(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            site.cachedOverview.take(120) +
+                                if (site.cachedOverview.length > 120) "..." else "",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            lineHeight = 16.sp
+                        )
                         if (site.aiRating > 0f) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(
-                                    alpha = 0.1f
-                                )
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                             ) {
                                 Text(
                                     " ${String.format("%.0f", site.aiRating)}/10 ",
-                                    modifier = Modifier.padding(
-                                        horizontal = 8.dp,
-                                        vertical = 4.dp
-                                    ),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -400,26 +486,30 @@ fun SiteCard(
 
             Spacer(Modifier.height(12.dp))
 
+            // أزرار الإجراءات
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // ✅ زر الزيارة — يعمل الآن
-                FilledTonalButton(
+                // زيارة
+                Surface(
                     onClick = onVisit,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
-                    Icon(
-                        Icons.Default.Language,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("زيارة", fontSize = 13.sp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.Language, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("زيارة", fontSize = 13.sp)
+                    }
                 }
 
-                // زر الشرح
+                // شرح
                 Surface(
                     onClick = onAnalyze,
                     modifier = Modifier.weight(1f),
@@ -428,51 +518,14 @@ fun SiteCard(
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ) {
                     Row(
-                        modifier = Modifier.padding(
-                            horizontal = 16.dp,
-                            vertical = 12.dp
-                        ),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Icon(Icons.Default.AutoAwesome, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(
-                            "شرح",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("شرح", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
-                }
-
-                // ✅ زر التعديل — يعمل الآن
-                IconButton(
-                    onClick = onEdit,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "تعديل",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // زر الحذف
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "حذف",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
                 }
             }
         }
