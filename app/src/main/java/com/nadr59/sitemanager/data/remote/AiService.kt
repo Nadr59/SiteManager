@@ -2,6 +2,7 @@ package com.nadr59.sitemanager.data.remote
 
 import com.google.gson.Gson
 import com.google.gson.JsonParser
+import com.nadr59.sitemanager.data.local.AnalysisType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -9,13 +10,9 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class AiService @Inject constructor(private val gson: Gson) {
+class AiService(private val gson: Gson) {
 
-    // ═══ مهلات أطول بكثير ═══
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -23,55 +20,57 @@ class AiService @Inject constructor(private val gson: Gson) {
         .retryOnConnectionFailure(true)
         .build()
 
-    suspend fun analyzeSite(content: SiteContent, config: AiConfig): AnalysisResult =
-        withContext(Dispatchers.IO) {
-            val prompt = buildPrompt(content)
+    suspend fun analyzeSite(
+        content: SiteContent,
+        config: AiConfig,
+        analysisType: AnalysisType = AnalysisType.EXPLAIN,
+        customQuestion: String = ""
+    ): AnalysisResult = withContext(Dispatchers.IO) {
+        val prompt = buildPrompt(content, analysisType, customQuestion)
 
-            // ═══ إعادة المحاولة 3 مرات ═══
-            var lastError: Exception? = null
-            repeat(3) { attempt ->
-                try {
-                    val raw = callAi(prompt, config)
-                    return@withContext parseResponse(raw)
-                } catch (e: Exception) {
-                    lastError = e
-                    if (attempt < 2) {
-                        Thread.sleep(2000L * (attempt + 1))
-                    }
-                }
+        var lastError: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                val raw = callAi(prompt, config)
+                return@withContext parseResponse(raw, analysisType)
+            } catch (e: Exception) {
+                lastError = e
+                if (attempt < 2) Thread.sleep(2000L * (attempt + 1))
             }
-            throw lastError ?: Exception("فشل التحليل بعد 3 محاولات")
         }
-
-    private fun buildPrompt(content: SiteContent): String {
-        val typeInstructions = when (content.type) {
-            SiteType.GITHUB_REPO -> "هذا مستودع GitHub. ركز على: وصف المشروع، التقنيات، التثبيت، الاستخدام، نقاط القوة والضعف."
-            SiteType.GITHUB_PROFILE -> "حلل ملف المطور: اهتماماته، مهاراته، أبرز مشاريعه."
-            SiteType.API_DOCS -> "حلل وثائق API: النقاط المهمة، طريقة الاستخدام، الأمثلة."
-            SiteType.DOCUMENTATION -> "لخص الوثائق: المواضيع الرئيسية، طريقة البدء."
-            SiteType.BLOG -> "لخص المقال: النقاط الرئيسية والأفكار المهمة."
-            SiteType.PACKAGE -> "حلل المكتبة: الغرض، التثبيت، الاستخدام، الميزات."
-            else -> "حلل هذا الموقع: الغرض، الخدمات، الجمهور المستهدف."
-        }
-
-        return """أنت مساعد ذكي لشرح المواقع والمستودعات البرمجية.
-حلل: "${content.url}" (${content.type.label})
-$typeInstructions
-المحتوى:
-${content.rawContent.take(4000)}
-أجب بـ Markdown:
-## نظرة عامة
-## الغرض والهدف
-## الميزات الرئيسية
-## التقنيات المستخدمة
-## كيفية البدء
-## أمثلة عملية
-## نقاط القوة
-## نقاط الضعف
-## تقييم (من 10)"""
+        throw lastError ?: Exception("فشل التحليل بعد 3 محاولات")
     }
 
-    private suspend fun callAi(prompt: String, config: AiConfig): String {
+    private fun buildPrompt(
+        content: SiteContent,
+        type: AnalysisType,
+        customQuestion: String
+    ): String {
+        val typeInstruction = when (type) {
+            AnalysisType.CUSTOM -> customQuestion
+            else -> type.promptPrefix
+        }
+
+        val contentSection = content.rawContent.take(4000)
+
+        return """أنت مساعد ذكي لتحليل المواقع.
+حلل: "${content.url}"
+النوع: ${type.displayName}
+
+$typeInstruction
+
+معلومات إضافية عن الموقع:
+${content.title?.let { "العنوان: $it" } ?: ""}
+${content.description?.let { "الوصف: $it" } ?: ""}
+${if (content.isHttps) "يستخدم HTTPS" else "لا يستخدم HTTPS"}
+
+المحتوى:
+$contentSection
+
+أجب بتنسيق Markdown مع عناوين واضحة."""
+    }
+
+    private fun callAi(prompt: String, config: AiConfig): String {
         val url = buildApiUrl(config)
         val model = buildModel(config)
 
@@ -94,21 +93,12 @@ ${content.rawContent.take(4000)}
         val response = client.newCall(request).execute()
         val responseBody = response.body?.string()
 
-        if (response.code == 429) {
-            throw Exception("تم تجاوز حد الطلبات — انتظر قليلاً ثم حاول مرة أخرى")
-        }
-        if (response.code == 401) {
-            throw Exception("مفتاح API غير صالح — تحقق من الإعدادات")
-        }
-        if (response.code == 402 || response.code == 403) {
-            throw Exception("انتهى رصيد API أو مفتاح مرفوض")
-        }
+        if (response.code == 429) throw Exception("تم تجاوز حد الطلبات")
+        if (response.code == 401) throw Exception("مفتاح API غير صالح")
         if (response.code != 200) {
-            throw Exception("خطأ الخادم ${response.code}: ${responseBody?.take(150) ?: "لا تفاصيل"}")
+            throw Exception("خطأ الخادم ${response.code}: ${responseBody?.take(150)}")
         }
-        if (responseBody.isNullOrBlank()) {
-            throw Exception("استجابة فارغة من الخادم")
-        }
+        if (responseBody.isNullOrBlank()) throw Exception("استجابة فارغة")
 
         return extractText(responseBody)
     }
@@ -116,6 +106,7 @@ ${content.rawContent.take(4000)}
     private fun buildApiUrl(config: AiConfig): String {
         return when (config.provider) {
             "groq"       -> "https://api.groq.com/openai/v1/chat/completions"
+            "orcarouter" -> "https://api.orcarouter.ai/v1/chat/completions"
             "openrouter" -> "https://openrouter.ai/api/v1/chat/completions"
             "openai"     -> "https://api.openai.com/v1/chat/completions"
             "hcnsec"     -> "https://api.hcnsec.cn/v1/chat/completions"
@@ -132,6 +123,7 @@ ${content.rawContent.take(4000)}
         return config.model.ifBlank {
             when (config.provider) {
                 "groq"       -> "llama-3.3-70b-versatile"
+                "orcarouter" -> "orcarouter/free"
                 "openrouter" -> "google/gemini-2.0-flash-exp"
                 "openai"     -> "gpt-4o-mini"
                 "hcnsec"     -> "auto"
@@ -143,19 +135,15 @@ ${content.rawContent.take(4000)}
     private fun extractText(body: String): String {
         val json = JsonParser.parseString(body).asJsonObject
 
-        // OpenAI format
         json.getAsJsonArray("choices")?.let { choices ->
             if (choices.size() > 0) {
                 choices[0].asJsonObject
                     .getAsJsonObject("message")
-                    ?.get("content")
-                    ?.asString
-                    ?.trim()
+                    ?.get("content")?.asString?.trim()
                     ?.let { return it }
             }
         }
 
-        // Gemini format
         json.getAsJsonArray("candidates")?.let { candidates ->
             if (candidates.size() > 0) {
                 candidates[0].asJsonObject
@@ -163,10 +151,7 @@ ${content.rawContent.take(4000)}
                     ?.getAsJsonArray("parts")
                     ?.let { parts ->
                         if (parts.size() > 0) {
-                            parts[0].asJsonObject
-                                .get("text")
-                                ?.asString
-                                ?.trim()
+                            parts[0].asJsonObject.get("text")?.asString?.trim()
                                 ?.let { return it }
                         }
                     }
@@ -176,13 +161,13 @@ ${content.rawContent.take(4000)}
         throw Exception("تنسيق استجابة غير متوقع: ${body.take(200)}")
     }
 
-    private fun parseResponse(raw: String): AnalysisResult {
+    private fun parseResponse(raw: String, type: AnalysisType): AnalysisResult {
         val sections = mutableMapOf<String, StringBuilder>()
         var currentKey = "overview"
         val current = StringBuilder()
 
         raw.lines().forEach { line ->
-            val header = Regex("^##\\s+(.+)").find(line)
+            val header = Regex("^##?\\s+(.+)").find(line)
             if (header != null) {
                 sections[currentKey] = current
                 current.clear()
@@ -211,7 +196,8 @@ ${content.rawContent.take(4000)}
                 cons = extractBullets(sections["cons"]?.toString() ?: "")
             ),
             rating = rating,
-            rawMarkdown = raw
+            rawMarkdown = raw,
+            analysisType = type.key
         )
     }
 
@@ -222,11 +208,11 @@ ${content.rawContent.take(4000)}
             "غرض" in n || "هدف" in n || "purpose" in n -> "purpose"
             "ميزة" in n || "feature" in n -> "features"
             "تقني" in n || "tech" in n -> "tech"
-            "استخدام" in n || "بدء" in n || "usage" in n || "getting" in n -> "usage"
+            "استخدام" in n || "بدء" in n || "usage" in n -> "usage"
             "مثال" in n || "example" in n -> "examples"
             "قوة" in n || "pros" in n -> "pros"
-            "ضعف" in n || "cons" in n || "ملاحظ" in n -> "cons"
-            "تقييم" in n || "rating" in n || "summary" in n -> "rating"
+            "ضعف" in n || "cons" in n -> "cons"
+            "تقييم" in n || "rating" in n -> "rating"
             else -> n.replace(" ", "_")
         }
     }
