@@ -1,10 +1,11 @@
-name: Android CI
+name: Build Site Manager
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,17 +20,30 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
-      - name: Setup Gradle and generate wrapper
-        uses: gradle/actions/setup-gradle@v4
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build Debug APK (full logs)
+        run: |
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            --info 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          gradle-version: '8.11.1'
-
-      - name: Build Debug APK
-        run: gradle assembleDebug
+          name: gradle-build-log
+          path: build.log
+          retention-days: 7
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
