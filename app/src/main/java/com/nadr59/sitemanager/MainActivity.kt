@@ -20,9 +20,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nadr59.sitemanager.ui.screens.AddSiteScreen
 import com.nadr59.sitemanager.ui.screens.AnalysisScreen
+import com.nadr59.sitemanager.ui.screens.DashboardScreen
 import com.nadr59.sitemanager.ui.screens.EditSiteScreen
 import com.nadr59.sitemanager.ui.screens.HomeScreen
 import com.nadr59.sitemanager.ui.screens.SettingsScreen
+import com.nadr59.sitemanager.ui.screens.SiteDetailScreen
 import com.nadr59.sitemanager.ui.theme.SiteManagerTheme
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -51,7 +53,6 @@ class MainActivity : ComponentActivity() {
                         navController = navController,
                         startDestination = "home"
                     ) {
-
                         // ═══ الرئيسية ═══
                         composable("home") {
                             val viewModel: SiteViewModel = hiltViewModel()
@@ -59,109 +60,115 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 sharedUrl = sharedUrl,
                                 onSharedUrlConsumed = { sharedUrl = null },
-                                onNavigateToAdd = {
-                                    navController.navigate("add")
-                                },
+                                onNavigateToAdd = { navController.navigate("add") },
                                 onNavigateToAddWithUrl = { url ->
                                     val encoded = URLEncoder.encode(url, "UTF-8")
                                     navController.navigate("add?url=$encoded")
                                     sharedUrl = null
                                 },
-                                onNavigateToSettings = {
-                                    navController.navigate("settings")
-                                },
+                                onNavigateToSettings = { navController.navigate("settings") },
                                 onNavigateToAnalysis = { siteId, name, url ->
                                     val encName = URLEncoder.encode(name, "UTF-8")
                                     val encUrl = URLEncoder.encode(url, "UTF-8")
-                                    navController.navigate(
-                                        "analysis/$siteId/$encName/$encUrl"
-                                    )
+                                    navController.navigate("analysis/$siteId/$encName/$encUrl/explain")
                                 },
-                                onNavigateToEdit = { siteId ->
-                                    navController.navigate("edit/$siteId")
-                                }
+                                onNavigateToEdit = { navController.navigate("edit/$it") },
+                                onNavigateToDetail = { navController.navigate("detail/$it") },
+                                onNavigateToDashboard = { navController.navigate("dashboard") }
                             )
                         }
 
-                        // ═══ إضافة موقع (بدون رابط) ═══
+                        // ═══ إضافة ═══
                         composable("add") {
-                            val viewModel: SiteViewModel = hiltViewModel()
-                            AddSiteScreen(
-                                viewModel = viewModel,
-                                initialUrl = null,
-                                onBack = { navController.popBackStack() }
-                            )
+                            val vm: SiteViewModel = hiltViewModel()
+                            AddSiteScreen(viewModel = vm, initialUrl = null) {
+                                navController.popBackStack()
+                            }
                         }
-
-                        // ═══ إضافة موقع (مع رابط مُشارك) ═══
                         composable(
                             route = "add?url={sharedUrl}",
-                            arguments = listOf(
-                                navArgument("sharedUrl") {
-                                    type = NavType.StringType
-                                    defaultValue = ""
-                                }
-                            )
-                        ) { backStackEntry ->
+                            arguments = listOf(navArgument("sharedUrl") {
+                                type = NavType.StringType; defaultValue = ""
+                            })
+                        ) { entry ->
                             val url = URLDecoder.decode(
-                                backStackEntry.arguments?.getString("sharedUrl") ?: "",
-                                "UTF-8"
+                                entry.arguments?.getString("sharedUrl") ?: "", "UTF-8"
                             )
-                            val viewModel: SiteViewModel = hiltViewModel()
-                            AddSiteScreen(
-                                viewModel = viewModel,
-                                initialUrl = url.ifBlank { null },
-                                onBack = { navController.popBackStack() }
-                            )
+                            val vm: SiteViewModel = hiltViewModel()
+                            AddSiteScreen(viewModel = vm, initialUrl = url.ifBlank { null }) {
+                                navController.popBackStack()
+                            }
                         }
 
-                        // ═══ تعديل موقع ═══
+                        // ═══ تعديل ═══
                         composable(
                             route = "edit/{siteId}",
-                            arguments = listOf(
-                                navArgument("siteId") {
-                                    type = NavType.IntType
-                                }
-                            )
-                        ) { backStackEntry ->
-                            val siteId = backStackEntry.arguments?.getInt("siteId") ?: 0
-                            val viewModel: SiteViewModel = hiltViewModel()
-                            EditSiteScreen(
-                                viewModel = viewModel,
+                            arguments = listOf(navArgument("siteId") { type = NavType.IntType })
+                        ) { entry ->
+                            val siteId = entry.arguments?.getInt("siteId") ?: 0
+                            val vm: SiteViewModel = hiltViewModel()
+                            EditSiteScreen(viewModel = vm, siteId = siteId) {
+                                navController.popBackStack()
+                            }
+                        }
+
+                        // ═══ تفاصيل الموقع ═══
+                        composable(
+                            route = "detail/{siteId}",
+                            arguments = listOf(navArgument("siteId") { type = NavType.IntType })
+                        ) { entry ->
+                            val siteId = entry.arguments?.getInt("siteId") ?: 0
+                            val vm: SiteViewModel = hiltViewModel()
+                            SiteDetailScreen(
                                 siteId = siteId,
-                                onBack = { navController.popBackStack() }
+                                viewModel = vm,
+                                onBack = { navController.popBackStack() },
+                                onNavigateToEdit = { navController.navigate("edit/$it") },
+                                onNavigateToAnalysis = { id, name, url, type ->
+                                    val encName = URLEncoder.encode(name, "UTF-8")
+                                    val encUrl = URLEncoder.encode(url, "UTF-8")
+                                    navController.navigate("analysis/$id/$encName/$encUrl/$type")
+                                }
                             )
                         }
 
                         // ═══ الإعدادات ═══
                         composable("settings") {
-                            SettingsScreen(
+                            SettingsScreen(onBack = { navController.popBackStack() })
+                        }
+
+                        // ═══ لوحة المعلومات ═══
+                        composable("dashboard") {
+                            val vm: SiteViewModel = hiltViewModel()
+                            DashboardScreen(
+                                viewModel = vm,
                                 onBack = { navController.popBackStack() }
                             )
                         }
 
-                        // ═══ التحليل ═══
+                        // ═══ التحليل (مع نوع التحليل) ═══
                         composable(
-                            route = "analysis/{siteId}/{siteName}/{siteUrl}",
+                            route = "analysis/{siteId}/{siteName}/{siteUrl}/{analysisType}",
                             arguments = listOf(
                                 navArgument("siteId") { type = NavType.IntType },
                                 navArgument("siteName") { type = NavType.StringType },
-                                navArgument("siteUrl") { type = NavType.StringType }
+                                navArgument("siteUrl") { type = NavType.StringType },
+                                navArgument("analysisType") { type = NavType.StringType }
                             )
                         ) { entry ->
                             val siteId = entry.arguments?.getInt("siteId") ?: 0
                             val siteName = URLDecoder.decode(
-                                entry.arguments?.getString("siteName") ?: "",
-                                "UTF-8"
+                                entry.arguments?.getString("siteName") ?: "", "UTF-8"
                             )
                             val siteUrl = URLDecoder.decode(
-                                entry.arguments?.getString("siteUrl") ?: "",
-                                "UTF-8"
+                                entry.arguments?.getString("siteUrl") ?: "", "UTF-8"
                             )
+                            val analysisType = entry.arguments?.getString("analysisType") ?: "explain"
                             AnalysisScreen(
                                 siteId = siteId,
                                 siteName = siteName,
                                 siteUrl = siteUrl,
+                                analysisTypeKey = analysisType,
                                 onBack = { navController.popBackStack() }
                             )
                         }
