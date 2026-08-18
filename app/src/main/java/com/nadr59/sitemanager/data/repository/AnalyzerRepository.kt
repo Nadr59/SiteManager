@@ -81,7 +81,8 @@ class AnalyzerRepository @Inject constructor(
         }
     }
 
-    private fun buildPrompt(
+    
+        private fun buildPrompt(
         url: String,
         title: String?,
         description: String?,
@@ -95,22 +96,35 @@ class AnalyzerRepository @Inject constructor(
             else -> type.promptPrefix
         }
 
-        return """أنت مساعد ذكي لتحليل المواقع.
-حلل: "$url"
-النوع: ${type.displayName}
+        // تنظيف المحتوى وإزالة التكرار
+        val cleanContent = rawContent
+            .replace(Regex("\\s+"), " ")
+            .replace(Regex("(.{50,})\\1+"), "$1")  // إزالة التكرار
+            .take(3000)
+            .trim()
+
+        return """أنت محلل مواقع ذكي ومختصر.
+
+حلل هذا الموقع: "$url"
+${title?.let { "عنوان الصفحة: $it" } ?: ""}
+${description?.let { "وصف الصفحة: $it" } ?: ""}
+${if (isHttps) "الموقع يستخدم HTTPS (اتصال آمن)" else "الموقع لا يستخدم HTTPS"}
+
+نوع التحليل المطلوب: ${type.displayName}
 
 $typeInstruction
 
-معلومات إضافية:
-${title?.let { "العنوان: $it" } ?: ""}
-${description?.let { "الوصف: $it" } ?: ""}
-${if (isHttps) "يستخدم HTTPS" else "لا يستخدم HTTPS"}
+قواعد مهمة:
+- لا تكرر نفس الجملة أو الفكرة أكثر من مرة
+- كن دقيقاً ولا تختلق معلومات غير موجودة
+- إذا لم تجد معلومة قل "غير متوفر" بدل الافتراض
+- أجب بالعربية
+- استخدم تنسيق Markdown مع عناوين واضحة
+- كن مختصراً ومفيداً
 
-المحتوى:
-${rawContent.take(4000)}
-
-أجب بتنسيق Markdown مع عناوين واضحة."""
-    }
+محتوى الموقع (مقتطع):
+$cleanContent"""
+        }
 
     private fun parseResponse(raw: String, type: AnalysisType): AnalysisResult {
         val sections = mutableMapOf<String, StringBuilder>()
