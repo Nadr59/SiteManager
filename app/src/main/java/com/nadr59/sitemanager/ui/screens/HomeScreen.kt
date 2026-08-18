@@ -80,6 +80,7 @@ import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
 import com.nadr59.sitemanager.viewmodel.SortOption
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.filled.SwapVert
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
