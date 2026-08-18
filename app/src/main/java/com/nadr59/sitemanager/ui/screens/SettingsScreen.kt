@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import🔂.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -169,13 +169,20 @@ fun SettingsScreen(
                             fontSize = 15.sp
                         )
                         if (isLoading) {
-                            CircularProgressIndicator(modifier = Modifier.height(16.dp).width(16.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .height(16.dp)
+                                    .width(16.dp),
+                                strokeWidth = 2.dp
+                            )
                         } else {
                             Text(
                                 serviceStatus,
                                 fontSize = 13.sp,
-                                color = if (isOnline) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                else MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
+                                color = if (isOnline)
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                else
+                                    MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
                             )
                         }
                     }
@@ -188,24 +195,39 @@ fun SettingsScreen(
                 }
             }
 
-            // ═══ معلومات الخدمة (ديناميكي) ═══
+            // ═══ معلومات الخدمة ═══
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("معلومات الخدمة", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(
+                        "معلومات الخدمة",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
                     Spacer(Modifier.height(12.dp))
                     InfoRow("الحالة", if (isOnline) "نشطة" else "غير متصلة")
                     InfoRow("المفاتيح النشطة", "$activeKeys")
                     InfoRow("التطبيقات المسجلة", "$totalApps")
                     if (providers.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
-                        Text("المزودات النشطة:", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "المزودات النشطة:",
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Spacer(Modifier.height(4.dp))
                         providers.forEach { provider ->
-                            Text("  • $provider", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                "  • $provider",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
                 }
@@ -215,12 +237,23 @@ fun SettingsScreen(
             if (errorMessage != null) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("خطأ في الاتصال", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text(
+                            "خطأ في الاتصال",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
                         Spacer(Modifier.height(4.dp))
-                        Text(errorMessage ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f))
+                        Text(
+                            errorMessage ?: "",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                        )
                     }
                 }
             }
@@ -228,13 +261,23 @@ fun SettingsScreen(
             // ═══ الأمان ═══
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                        Text("الأمان والخصوصية", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Icon(
+                            Icons.Default.Security,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            "الأمان والخصوصية",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -252,13 +295,23 @@ fun SettingsScreen(
             // ═══ معلومات التطبيق ═══
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                        Text("عن التطبيق", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            "عن التطبيق",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
                     }
                     Spacer(Modifier.height(12.dp))
                     InfoRow("الإصدار", "2.1.0")
