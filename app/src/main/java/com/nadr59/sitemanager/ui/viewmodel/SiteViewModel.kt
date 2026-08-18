@@ -1,16 +1,13 @@
 package com.nadr59.sitemanager.viewmodel
 
 import android.app.Application
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
 import com.nadr59.sitemanager.data.local.CategoryCount
 import com.nadr59.sitemanager.data.local.SiteAnalysisEntity
 import com.nadr59.sitemanager.data.local.SiteDatabase
 import com.nadr59.sitemanager.data.local.SiteEntity
-import com.nadr59.sitemanager.data.remote.AiConfig
-import com.nadr59.sitemanager.data.remote.AiService
+import com.nadr59.sitemanager.data.remote.ApiClient
 import com.nadr59.sitemanager.data.remote.WebScraper
 import com.nadr59.sitemanager.data.repository.AnalyzerRepository
 import com.nadr59.sitemanager.data.repository.SiteRepository
@@ -24,7 +21,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// ═══ خيارات الفرز ═══
 enum class SortOption(val label: String) {
     NEWEST("الأحدث"),
     OLDEST("الأقدم"),
@@ -34,7 +30,6 @@ enum class SortOption(val label: String) {
     LAST_OPENED("آخر فتح")
 }
 
-// ═══ حالة الواجهة الرئيسية ═══
 data class HomeUiState(
     val allSites: List<SiteEntity> = emptyList(),
     val filteredSites: List<SiteEntity> = emptyList(),
@@ -46,7 +41,6 @@ data class HomeUiState(
     val isLoading: Boolean = false
 )
 
-// ═══ إحصائيات Dashboard ═══
 data class DashboardStats(
     val totalCount: Int = 0,
     val favoriteCount: Int = 0,
@@ -66,16 +60,14 @@ class SiteViewModel @Inject constructor(
     private val dao = database.siteDao()
     private val repository = SiteRepository(dao)
     private val scraper = WebScraper()
-    private val aiService = AiService(Gson())
-    val analyzerRepository = AnalyzerRepository(scraper, aiService, dao)
+    private val apiClient = ApiClient()
+    val analyzerRepository = AnalyzerRepository(scraper, apiClient, dao)
 
-    // ═══ حالات البحث والفرز ═══
     private val _searchQuery = MutableStateFlow("")
     private val _selectedCategory = MutableStateFlow("الكل")
     private val _sortOption = MutableStateFlow(SortOption.NEWEST)
     private val _showFavoritesOnly = MutableStateFlow(false)
 
-    // ═══ حالة الواجهة الرئيسية — combine واحد بخمسة تدفقات ═══
     val uiState: StateFlow<HomeUiState> = combine(
         repository.getAllSites(),
         _searchQuery,
@@ -106,7 +98,6 @@ class SiteViewModel @Inject constructor(
         initialValue = HomeUiState(isLoading = true)
     )
 
-    // ═══ إحصائيات Dashboard — combine متسلسل ═══
     val dashboardStats: StateFlow<DashboardStats> =
         combine(
             repository.getTotalCount(),
@@ -148,9 +139,6 @@ class SiteViewModel @Inject constructor(
             initialValue = DashboardStats()
         )
 
-    // ═══════════════════════════════════════════
-    // تطبيق الفلاتر والفرز
-    // ═══════════════════════════════════════════
     private fun applyFilters(
         sites: List<SiteEntity>,
         query: String,
@@ -160,13 +148,8 @@ class SiteViewModel @Inject constructor(
     ): List<SiteEntity> {
         var result = sites
 
-        if (favoritesOnly) {
-            result = result.filter { it.isFavorite }
-        }
-
-        if (category != "الكل") {
-            result = result.filter { it.category == category }
-        }
+        if (favoritesOnly) result = result.filter { it.isFavorite }
+        if (category != "الكل") result = result.filter { it.category == category }
 
         if (query.isNotBlank()) {
             val q = query.lowercase()
@@ -198,97 +181,43 @@ class SiteViewModel @Inject constructor(
         return pinned + sortedUnpinned
     }
 
-    // ═══════════════════════════════════════════
-    // أحداث البحث والفرز
-    // ═══════════════════════════════════════════
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
+    fun updateSearchQuery(query: String) { _searchQuery.value = query }
+    fun selectCategory(category: String) { _selectedCategory.value = category }
+    fun setSortOption(option: SortOption) { _sortOption.value = option }
+    fun toggleFavoritesOnly() { _showFavoritesOnly.value = !_showFavoritesOnly.value }
 
-    fun selectCategory(category: String) {
-        _selectedCategory.value = category
-    }
-
-    fun setSortOption(option: SortOption) {
-        _sortOption.value = option
-    }
-
-    fun toggleFavoritesOnly() {
-        _showFavoritesOnly.value = !_showFavoritesOnly.value
-    }
-
-    // ═══════════════════════════════════════════
-    // عمليات CRUD
-    // ═══════════════════════════════════════════
     fun addSite(site: SiteEntity) {
-        viewModelScope.launch {
-            repository.insertSite(site)
-        }
+        viewModelScope.launch { repository.insertSite(site) }
     }
 
     fun updateSite(site: SiteEntity) {
-        viewModelScope.launch {
-            repository.updateSite(site)
-        }
+        viewModelScope.launch { repository.updateSite(site) }
     }
 
     fun deleteSite(site: SiteEntity) {
-        viewModelScope.launch {
-            repository.deleteSite(site)
-        }
+        viewModelScope.launch { repository.deleteSite(site) }
     }
 
-    // ═══════════════════════════════════════════
-    // إجراءات سريعة
-    // ═══════════════════════════════════════════
     fun incrementVisit(id: Int) {
-        viewModelScope.launch {
-            repository.incrementVisit(id)
-        }
+        viewModelScope.launch { repository.incrementVisit(id) }
     }
 
     fun toggleFavorite(id: Int, currentValue: Boolean) {
-        viewModelScope.launch {
-            repository.setFavorite(id, !currentValue)
-        }
+        viewModelScope.launch { repository.setFavorite(id, !currentValue) }
     }
 
     fun togglePinned(id: Int, currentValue: Boolean) {
-        viewModelScope.launch {
-            repository.setPinned(id, !currentValue)
-        }
+        viewModelScope.launch { repository.setPinned(id, !currentValue) }
     }
 
     suspend fun checkDuplicate(url: String): Boolean {
         return repository.countByUrl(url) > 0
     }
 
-    // ═══════════════════════════════════════════
-    // تدفقات البيانات
-    // ═══════════════════════════════════════════
-    fun getSiteById(id: Int): Flow<SiteEntity?> {
-        return repository.getSiteByIdFlow(id)
-    }
+    fun getSiteById(id: Int): Flow<SiteEntity?> = repository.getSiteByIdFlow(id)
 
-    fun getAnalysesForSite(siteId: Int): Flow<List<SiteAnalysisEntity>> {
-        return repository.getAnalysesForSite(siteId)
-    }
+    fun getAnalysesForSite(siteId: Int): Flow<List<SiteAnalysisEntity>> =
+        repository.getAnalysesForSite(siteId)
 
-    fun getAllCategories(): Flow<List<String>> {
-        return repository.getAllCategories()
-    }
-
-    // ═══════════════════════════════════════════
-    // تحميل إعدادات AI
-    // ═══════════════════════════════════════════
-    fun loadAiConfig(): AiConfig {
-        val prefs = getApplication<Application>()
-            .getSharedPreferences("sitemanager_prefs", Context.MODE_PRIVATE)
-        return AiConfig(
-            provider = prefs.getString("ai_provider", "groq") ?: "groq",
-            apiKey = prefs.getString("ai_key", "") ?: "",
-            model = prefs.getString("ai_model", "") ?: "",
-            baseUrl = prefs.getString("ai_base_url", "") ?: ""
-        )
-    }
+    fun getAllCategories(): Flow<List<String>> = repository.getAllCategories()
 }
