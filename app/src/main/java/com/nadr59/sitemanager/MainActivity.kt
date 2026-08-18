@@ -140,6 +140,14 @@ class MainActivity : ComponentActivity() {
                                 onBack = { navController.popBackStack() }
                             )
                         }
+                        // ═══ تصدير واستيراد ═══
+composable("export") {
+    val vm: SiteViewModel = hiltViewModel()
+    ExportImportScreen(
+        viewModel = vm,
+        onBack = { navController.popBackStack() }
+    )
+}
 
                         // ═══ تفاصيل الموقع ═══
                         composable(
