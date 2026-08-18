@@ -22,6 +22,7 @@ import com.nadr59.sitemanager.ui.screens.AddSiteScreen
 import com.nadr59.sitemanager.ui.screens.AnalysisScreen
 import com.nadr59.sitemanager.ui.screens.DashboardScreen
 import com.nadr59.sitemanager.ui.screens.EditSiteScreen
+import com.nadr59.sitemanager.ui.screens.ExportImportScreen
 import com.nadr59.sitemanager.ui.screens.HomeScreen
 import com.nadr59.sitemanager.ui.screens.SettingsScreen
 import com.nadr59.sitemanager.ui.screens.SiteDetailScreen
@@ -71,6 +72,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigateToSettings = {
                                     navController.navigate("settings")
+                                },
+                                onNavigateToExport = {
+                                    navController.navigate("export")
                                 },
                                 onNavigateToAnalysis = { siteId, name, url ->
                                     val encName = URLEncoder.encode(name, "UTF-8")
@@ -140,14 +144,15 @@ class MainActivity : ComponentActivity() {
                                 onBack = { navController.popBackStack() }
                             )
                         }
+
                         // ═══ تصدير واستيراد ═══
-composable("export") {
-    val vm: SiteViewModel = hiltViewModel()
-    ExportImportScreen(
-        viewModel = vm,
-        onBack = { navController.popBackStack() }
-    )
-}
+                        composable("export") {
+                            val vm: SiteViewModel = hiltViewModel()
+                            ExportImportScreen(
+                                viewModel = vm,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
 
                         // ═══ تفاصيل الموقع ═══
                         composable(
@@ -233,11 +238,11 @@ composable("export") {
                             )
                         }
 
-                    } // end NavHost
-                } // end Surface
-            } // end SiteManagerTheme
-        } // end setContent
-    } // end onCreate
+                    }
+                }
+            }
+        }
+    }
 
     private fun handleIntent(intent: Intent?) {
         when (intent?.action) {
@@ -256,4 +261,4 @@ composable("export") {
         super.onNewIntent(intent)
         handleIntent(intent)
     }
-} // end class
+}
