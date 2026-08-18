@@ -165,6 +165,10 @@ fun HomeScreen(
                             }
                         }
                     }
+                    // تصدير واستيراد
+IconButton(onClick = { navController.navigate("export") }) {
+    Icon(Icons.Default.SwapVert, contentDescription = "تصدير واستيراد")
+}
                     // الإعدادات
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "الإعدادات")
