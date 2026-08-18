@@ -13,8 +13,7 @@ data class SiteContent(
     val description: String?,
     val rawContent: String,
     val isHttps: Boolean,
-    val statusCode: Int,
-    val headers: Map<String, String>
+    val statusCode: Int
 )
 
 class WebScraper {
@@ -38,9 +37,6 @@ class WebScraper {
         val statusCode = response.code
         val isHttps = finalUrl.startsWith("https")
 
-        val headers = mutableMapOf<String, String>()
-        response.headers.forEach { headers[it.first] = it.second }
-
         val doc = Jsoup.parse(body)
 
         val title = doc.title()?.take(500)
@@ -48,7 +44,6 @@ class WebScraper {
             .ifEmpty { doc.select("meta[property=og:description]").attr("content") }
             .take(1000)
 
-        // تنظيف المحتوى
         doc.select("script, style, nav, footer, header, aside, .ad, .advertisement").remove()
         val text = doc.body()?.text()?.take(8000) ?: ""
 
@@ -58,8 +53,7 @@ class WebScraper {
             description = description,
             rawContent = text,
             isHttps = isHttps,
-            statusCode = statusCode,
-            headers = headers
+            statusCode = statusCode
         )
     }
 
