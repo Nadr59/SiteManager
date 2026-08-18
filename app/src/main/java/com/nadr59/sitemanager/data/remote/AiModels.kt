@@ -17,10 +17,3 @@ data class ProsAndCons(
     val pros: List<String> = emptyList(),
     val cons: List<String> = emptyList()
 )
-
-data class AiConfig(
-    val provider: String = "groq",
-    val apiKey: String = "",
-    val model: String = "",
-    val baseUrl: String = ""
-)
