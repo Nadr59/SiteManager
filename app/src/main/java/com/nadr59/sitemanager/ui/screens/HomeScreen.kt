@@ -91,6 +91,7 @@ fun HomeScreen(
     onNavigateToAdd: () -> Unit,
     onNavigateToAddWithUrl: (String) -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToExport: () -> Unit,
     onNavigateToAnalysis: (Int, String, String) -> Unit,
     onNavigateToEdit: (Int) -> Unit,
     onNavigateToDetail: (Int) -> Unit,
@@ -167,9 +168,9 @@ fun HomeScreen(
                         }
                     }
                     // تصدير واستيراد
-IconButton(onClick = { navController.navigate("export") }) {
-    Icon(Icons.Default.SwapVert, contentDescription = "تصدير واستيراد")
-}
+                    IconButton(onClick = onNavigateToExport) {
+                        Icon(Icons.Default.SwapVert, contentDescription = "تصدير واستيراد")
+                    }
                     // الإعدادات
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "الإعدادات")
