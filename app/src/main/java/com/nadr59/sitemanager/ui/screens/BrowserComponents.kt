@@ -28,45 +28,7 @@ fun BrowserTopBar(
         title = {
             Column {
                 Text(
-                    text            if (text.isBlank()) return
-
-            _selectedText.value = text
-
-            viewModelScope.launch {
-                val result = translationRepository.translateText(
-                    text = text,
-                    targetLanguage = _uiState.value.targetLanguage
-                )
-                result.fold(
-                    onSuccess = { translated ->
-                        _selectedTranslation.value = translated
-                        val replaceScript = pageTranslator.buildReplaceSelectionScript(translated)
-                        _pendingJs.value = replaceScript
-                    },
-                    onFailure = { e ->
-                        _uiState.update {
-                            it.copy(error = "فشل ترجمة النص: ${e.message}")
-                        }
-                    }
-                )
-            }
-        } catch (_: Exception) {}
-    }
-
-    // ═══ إلغاء الترجمة ═══
-    fun resetTranslation() {
-        _uiState.update {
-            it.copy(
-                isTranslationMode = false,
-                isTranslating = false,
-                translationProgress = 0f
-            )
-        }
-        _extractedNodes.value = emptyList()
-        _translatedNodes.value = emptyList()
-    }
-
- = title.ifBlank { "المتصفح" },
+                    text = title.ifBlank { "المتصفح" },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleSmall
@@ -144,21 +106,23 @@ fun TranslationProgressBar(progress: Float) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                "جاري الترجمة...",
+                text = "جاري الترجمة...",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                "${(progress * 100).toInt()}%",
+                text = "${(progress * 100).toInt()}%",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         LinearProgressIndicator(
             progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
         )
     }
 }
