@@ -11,6 +11,7 @@ import com.nadr59.sitemanager.data.remote.ApiClient
 import com.nadr59.sitemanager.data.remote.WebScraper
 import com.nadr59.sitemanager.data.repository.AnalyzerRepository
 import com.nadr59.sitemanager.data.repository.SiteRepository
+import com.nadr59.sitemanager.data.model.Site
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
 
 enum class SortOption(val label: String) {
     NEWEST("الأحدث"),
@@ -212,6 +214,22 @@ class SiteViewModel @Inject constructor(
 
     suspend fun checkDuplicate(url: String): Boolean {
         return repository.countByUrl(url) > 0
+    }
+        // ═══ حالة اختيار فتح الرابط ═══
+    private val _showOpenDialog = MutableStateFlow(false)
+    val showOpenDialog: StateFlow<Boolean> = _showOpenDialog.asStateFlow()
+
+    private val _selectedSiteForOpen = MutableStateFlow<Site?>(null)
+    val selectedSiteForOpen: StateFlow<Site?> = _selectedSiteForOpen.asStateFlow()
+
+    fun requestOpenSite(site: Site) {
+        _selectedSiteForOpen.value = site
+        _showOpenDialog.value = true
+    }
+
+    fun dismissOpenDialog() {
+        _showOpenDialog.value = false
+        _selectedSiteForOpen.value = null
     }
 
     fun getSiteById(id: Int): Flow<SiteEntity?> = repository.getSiteByIdFlow(id)
