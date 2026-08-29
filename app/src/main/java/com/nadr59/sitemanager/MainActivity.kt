@@ -31,6 +31,7 @@ import com.nadr59.sitemanager.viewmodel.SiteViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import java.net.URLDecoder
 import java.net.URLEncoder
+import com.nadr59.sitemanager.viewmodel.BrowserViewModel
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -81,7 +82,9 @@ class MainActivity : ComponentActivity() {
                                     val encUrl = URLEncoder.encode(url, "UTF-8")
                                     navController.navigate(
                                         "analysis/$siteId/$encName/$encUrl/explain"
+                                        
                                     )
+                                    navController.navigate("browser/$siteId")
                                 },
                                 onNavigateToEdit = { siteId ->
                                     navController.navigate("edit/$siteId")
