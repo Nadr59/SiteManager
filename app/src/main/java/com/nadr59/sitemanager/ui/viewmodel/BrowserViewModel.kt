@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.nadr59.sitemanager.data.model.BrowserState
 import com.nadr59.sitemanager.data.model.PageTextNode
 import com.nadr59.sitemanager.data.model.TranslatedNode
+import com.nadr59.sitemanager.data.repository.SiteRepository
 import com.nadr59.sitemanager.data.repository.TranslationRepository
 import com.nadr59.sitemanager.domain.translator.WebPageTranslator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,7 +19,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class BrowserViewModel @Inject constructor(
-    private val translationRepository: TranslationRepository
+    private val translationRepository: TranslationRepository,
+    private val siteRepository: SiteRepository
 ) : ViewModel() {
 
     private val pageTranslator = WebPageTranslator()
@@ -45,12 +47,33 @@ class BrowserViewModel @Inject constructor(
         _pendingJs.value = null
     }
 
-    fun loadUrl(url: String) {
-        _uiState.update { it.copy(url = url) }
+    // ═══ تحميل الموقع من قاعدة البيانات ═══
+    fun loadSite(siteId: Int) {
+        viewModelScope.launch {
+            try {
+                val site = siteRepository.getSiteById(siteId)
+                if (site != null) {
+                    _uiState.update {
+                        it.copy(
+                            url = site.url,
+                            title = site.name
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(error = "الموقع غير موجود")
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(error = "فشل تحميل الموقع: ${e.message}")
+                }
+            }
+        }
     }
 
-    fun loadSite(siteId: Int) {
-        // TODO: جلب من قاعدة البيانات
+    fun loadUrl(url: String) {
+        _uiState.update { it.copy(url = url) }
     }
 
     fun updateTitle(title: String) {
@@ -58,10 +81,7 @@ class BrowserViewModel @Inject constructor(
     }
 
     fun updateProgress(progress: Int) {
-        _uiState.update {
-            it.copy(
-                progress = progress,
-                isLoading = progress < 100
+       < 100
             )
         }
     }
@@ -76,6 +96,7 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
+    // ═══ الترجمة ═══
     fun setTargetLanguage(language: String) {
         _uiState.update { it.copy(targetLanguage = language) }
     }
@@ -97,7 +118,10 @@ class BrowserViewModel @Inject constructor(
                 showTranslationSheet = false
             )
         }
-        _pendingJs.value = pageTranslator.buildExtractScript()
+        _pendingJs.value = pageTranslator.build _uiState.update {
+            it.copy(
+                progress = progress,
+                isLoading = progress ExtractScript()
     }
 
     fun onNodesExtracted(jsonString: String) {
@@ -178,9 +202,7 @@ class BrowserViewModel @Inject constructor(
                     }
                 )
             }
-        } catch (_: Exception) {
-            // تجاهل أخطاء تحليل JSON
-        }
+        } catch (_: Exception) {}
     }
 
     fun resetTranslation() {
@@ -198,4 +220,4 @@ class BrowserViewModel @Inject constructor(
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
-}
+                }
