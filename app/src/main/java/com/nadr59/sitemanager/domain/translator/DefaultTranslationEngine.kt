@@ -20,11 +20,9 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
         try {
             if (text.isBlank()) return@withContext Result.success("")
 
-            // ═══ نجرب Google Translate المجاني ═══
             val result = translateViaGoogle(text, sourceLanguage, targetLanguage)
             if (result.isSuccess) return@withContext result
 
-            // ═══ احتياطي: MyMemory ═══
             val fallback = translateViaMyMemory(text, sourceLanguage, targetLanguage)
             if (fallback.isSuccess) return@withContext fallback
 
@@ -41,36 +39,32 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
     ): Result<List<String>> = withContext(Dispatchers.IO) {
         try {
             val results = mutableListOf<String>()
-
             for (text in texts) {
                 if (text.isBlank()) {
                     results.add("")
                     continue
                 }
-
                 val result = translate(text, sourceLanguage, targetLanguage)
                 result.fold(
                     onSuccess = { results.add(it) },
                     onFailure = { results.add(text) }
                 )
             }
-
             Result.success(results)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    // ═══ Google Translate (مجاني) ═══
     private fun translateViaGoogle(
         text: String,
         source: String,
         target: String
     ): Result<String> {
         return try {
-            val encoded = URLEncoder.com/translate_a/single?" +
-                "client=gtx&sl=$source&tl=$target&dt=t&q=$encoded"
-            )
+            val encoded = URLEncoder.encode(text, "UTF-8")
+            val urlStr = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$source&tl=$target&dt=t&q=$encoded"
+            val url = URL(urlStr)
 
             val conn = url.openConnection() as HttpURLConnection
             conn.apply {
@@ -85,9 +79,7 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
                 return Result.failure(Exception("HTTP ${conn.responseCode}"))
             }
 
-.encode(text, "UTF-8")
-            val url = URL(
-                "https://translate.googleapis            val response = conn.inputStream.bufferedReader().readText()
+            val response = conn.inputStream.bufferedReader().readText()
             conn.disconnect()
 
             val arr = JSONArray(response)
@@ -109,7 +101,6 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
         }
     }
 
-    // ═══ MyMemory (مجاني — احتياطي) ═══
     private fun translateViaMyMemory(
         text: String,
         source: String,
@@ -118,9 +109,8 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
         return try {
             val encoded = URLEncoder.encode(text.take(500), "UTF-8")
             val langPair = "${source}|${target}"
-            val url = URL(
-                "https://api.mymemory.translated.net/get?q=$encoded&langpair=$langPair"
-            )
+            val urlStr = "https://api.mymemory.translated.net/get?q=$encoded&langpair=$langPair"
+            val url = URL(urlStr)
 
             val conn = url.openConnection() as HttpURLConnection
             conn.apply {
@@ -150,4 +140,4 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
             Result.failure(e)
         }
     }
-              }
+}
