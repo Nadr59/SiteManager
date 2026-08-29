@@ -141,6 +141,13 @@ fun BrowserScreen(
                         }
                     },
                     update = { view ->
+                        webView = view
+                    }
+                )
+            }
+
+            if (uiState.isLoading) {
+                LinearProgressIndicator(
                     progress = { uiState.progress / 100f },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -168,11 +175,11 @@ fun BrowserScreen(
                         )
                     ) {
                         Column(
-                            Modifier.padding(24.dp),
+                            modifier = Modifier.padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             CircularProgressIndicator()
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "جاري ترجمة الصفحة...",
                                 style = MaterialTheme.typography.bodyMedium
@@ -216,4 +223,4 @@ fun BrowserScreen(
             onDismiss = { viewModel.hideTranslationSheet() }
         )
     }
-                        }
+}
