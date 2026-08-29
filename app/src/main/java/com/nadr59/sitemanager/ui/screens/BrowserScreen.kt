@@ -4,9 +4,29 @@ import android.annotation.SuppressLint
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -28,7 +48,6 @@ fun BrowserScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var urlLoaded by remember { mutableStateOf(false) }
 
-    // ═══ تحميل بيانات الموقع ═══
     LaunchedEffect(siteId) {
         if (siteId > 0) {
             viewModel.loadSite(siteId)
@@ -37,7 +56,6 @@ fun BrowserScreen(
         }
     }
 
-    // ═══ تنفيذ JavaScript المعلق ═══
     LaunchedEffect(pendingJs) {
         val script = pendingJs
         if (script != null && webView != null) {
@@ -87,15 +105,12 @@ fun BrowserScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ═══ WebView ═══
             if (uiState.url.isNotBlank()) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { context ->
                         WebView(context).apply {
-                           Url(uiState.url)
                             webView = this
-
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             settings.loadWithOverviewMode = true
@@ -137,20 +152,20 @@ fun BrowserScreen(
                                 override fun onProgressChanged(
                                     view: WebView?,
                                     newProgress: Int
- urlLoaded = true
+                                ) {
+                                    viewModel.updateProgress(newProgress)
+                                }
+                            }
+
+                            loadUrl(uiState.url)
+                            urlLoaded = true
                         }
                     },
                     update = { view ->
                         webView = view
-                        // ═══ تحميل URL إذا تغيّر ═══
-                        if (!urlLoaded && uiState.url.isNotBlank()) {
-                            view.loadUrl(uiState.url)
-                            urlLoaded = true
-                        }
                     }
                 )
             } else {
-                // ═══ شاشة انتظار ═══
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -166,7 +181,6 @@ fun BrowserScreen(
                 }
             }
 
-            // ═══ شريط التحميل ═══
             if (uiState.isLoading) {
                 LinearProgressIndicator(
                     progress = { uiState.progress / 100f },
@@ -177,7 +191,6 @@ fun BrowserScreen(
                 )
             }
 
-            // ═══ شريط تقدم الترجمة ═══
             if (uiState.isTranslating) {
                 Column(
                     modifier = Modifier
@@ -216,7 +229,6 @@ fun BrowserScreen(
                 }
             }
 
-            // ═══ رسالة الخطأ ═══
             uiState.error?.let { error ->
                 Snackbar(
                     modifier = Modifier
@@ -234,7 +246,6 @@ fun BrowserScreen(
         }
     }
 
-    // ═══ قائمة الترجمة ═══
     if (uiState.showTranslationSheet) {
         TranslationBottomSheet(
             currentLanguage = uiState.targetLanguage,
@@ -242,9 +253,9 @@ fun BrowserScreen(
             onTranslatePage = { viewModel.startPageTranslation() },
             onTranslateSelection = {
                 viewModel.hideTranslationSheet()
-                viewModel.translateSelectedText()
+                viewModel.translateSelectedانسخ الملفين وأرسل لي النتيجة!**Text()
             },
             onDismiss = { viewModel.hideTranslationSheet() }
         )
     }
-                    }
+}
