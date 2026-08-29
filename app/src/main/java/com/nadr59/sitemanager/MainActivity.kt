@@ -28,6 +28,7 @@ import com.nadr59.sitemanager.ui.screens.SettingsScreen
 import com.nadr59.sitemanager.ui.screens.SiteDetailScreen
 import com.nadr59.sitemanager.ui.theme.SiteManagerTheme
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
+import com.nadr59.sitemanager.viewmodel.BrowserViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -264,4 +265,20 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         handleIntent(intent)
     }
+                // ═══ المتصفح الداخلي ═══
+            composable(
+                route = "browser/{siteId}",
+                arguments = listOf(
+                    navArgument("siteId") { type = NavType.IntType }
+                )
+            ) { entry ->
+                val siteId = entry.arguments?.getInt("siteId") ?: 0
+                val vm: BrowserViewModel = hiltViewModel()
+
+                BrowserScreen(
+                    siteId = siteId,
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() }
+                )
+            }
 }
