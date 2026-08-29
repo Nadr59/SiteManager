@@ -6,7 +6,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,37 +27,101 @@ fun TranslationBottomSheet(
         "es" to "Español",
         "tr" to "Türkçe",
         "ur" to "اردو",
-        "fa                Spacer(Modifier.height(4.dp))
+        "fa" to "فارسی",
+        "id" to "Indonesia",
+        "zh" to "中文",
+        "ja" to "日本語",
+        "ko" to "한국어",
+        "hi" to "हिन्दी",
+        "ru" to "Русский"
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "ترجمة الصفحة",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "اللغة المستهدفة:",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val rows = languages.chunked(3)
+            rows.forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowItems.forEach { (code, name) ->
+                        val selected = currentLanguage == code
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onLanguageSelected(code) },
+                            label = {
+                                Text(
+                                    text = name,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                    }
+                    repeat(3 - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider()
-            Spacer(Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // ═══ أزرار الترجمة ═══
             Button(
                 onClick = onTranslatePage,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.Translate, null)
-                Spacer(Modifier.width(8.dp))
-                Text("ترجمة الصفحة كاملة", fontWeight = FontWeight.Bold)
+                Icon(Icons.Default.Translate, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "ترجمة الصفحة كاملة",
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedButton(
                 onClick = onTranslateSelection,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.TextFields, null)
-                Spacer(Modifier.width(8.dp))
-                Text("ترجمة النص المحدد")
+                Icon(Icons.Default.TextFields, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "ترجمة النص المحدد")
             }
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
-      }
+}
