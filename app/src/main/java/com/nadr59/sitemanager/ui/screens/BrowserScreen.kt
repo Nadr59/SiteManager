@@ -26,15 +26,18 @@ fun BrowserScreen(
     val pendingJs by viewModel.pendingJs.collectAsState()
 
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var urlLoaded by remember { mutableStateOf(false) }
 
+    // ═══ تحميل بيانات الموقع ═══
     LaunchedEffect(siteId) {
-        if (initialUrl.isNotBlank()) {
-            viewModel.loadUrl(initialUrl)
-        } else {
+        if (siteId > 0) {
             viewModel.loadSite(siteId)
+        } else if (initialUrl.isNotBlank()) {
+            viewModel.loadUrl(initialUrl)
         }
     }
 
+    // ═══ تنفيذ JavaScript المعلق ═══
     LaunchedEffect(pendingJs) {
         val script = pendingJs
         if (script != null && webView != null) {
@@ -84,11 +87,13 @@ fun BrowserScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // ═══ WebView ═══
             if (uiState.url.isNotBlank()) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { context ->
                         WebView(context).apply {
+                           Url(uiState.url)
                             webView = this
 
                             settings.javaScriptEnabled = true
@@ -132,20 +137,36 @@ fun BrowserScreen(
                                 override fun onProgressChanged(
                                     view: WebView?,
                                     newProgress: Int
-                                ) {
-                                    viewModel.updateProgress(newProgress)
-                                }
-                            }
-
-                            loadUrl(uiState.url)
+ urlLoaded = true
                         }
                     },
                     update = { view ->
                         webView = view
+                        // ═══ تحميل URL إذا تغيّر ═══
+                        if (!urlLoaded && uiState.url.isNotBlank()) {
+                            view.loadUrl(uiState.url)
+                            urlLoaded = true
+                        }
                     }
                 )
+            } else {
+                // ═══ شاشة انتظار ═══
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "جاري تحميل الموقع...",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
             }
 
+            // ═══ شريط التحميل ═══
             if (uiState.isLoading) {
                 LinearProgressIndicator(
                     progress = { uiState.progress / 100f },
@@ -156,6 +177,7 @@ fun BrowserScreen(
                 )
             }
 
+            // ═══ شريط تقدم الترجمة ═══
             if (uiState.isTranslating) {
                 Column(
                     modifier = Modifier
@@ -194,6 +216,7 @@ fun BrowserScreen(
                 }
             }
 
+            // ═══ رسالة الخطأ ═══
             uiState.error?.let { error ->
                 Snackbar(
                     modifier = Modifier
@@ -205,12 +228,13 @@ fun BrowserScreen(
                         }
                     }
                 ) {
-                    Text(error)
+                    Text(text = error)
                 }
             }
         }
     }
 
+    // ═══ قائمة الترجمة ═══
     if (uiState.showTranslationSheet) {
         TranslationBottomSheet(
             currentLanguage = uiState.targetLanguage,
@@ -223,4 +247,4 @@ fun BrowserScreen(
             onDismiss = { viewModel.hideTranslationSheet() }
         )
     }
-}
+                    }
