@@ -46,7 +46,6 @@ fun BrowserScreen(
     val pendingJs by viewModel.pendingJs.collectAsState()
 
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var urlLoaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(siteId) {
         if (siteId > 0) {
@@ -158,7 +157,6 @@ fun BrowserScreen(
                             }
 
                             loadUrl(uiState.url)
-                            urlLoaded = true
                         }
                     },
                     update = { view ->
@@ -174,7 +172,7 @@ fun BrowserScreen(
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "جاري تحميل الموقع...",
+                            text = "loading...",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
@@ -216,7 +214,7 @@ fun BrowserScreen(
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "جاري ترجمة الصفحة...",
+                                text = "Translating...",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
@@ -236,7 +234,7 @@ fun BrowserScreen(
                         .align(Alignment.BottomCenter),
                     action = {
                         TextButton(onClick = { viewModel.clearError() }) {
-                            Text("إغلاق")
+                            Text("OK")
                         }
                     }
                 ) {
@@ -249,11 +247,11 @@ fun BrowserScreen(
     if (uiState.showTranslationSheet) {
         TranslationBottomSheet(
             currentLanguage = uiState.targetLanguage,
-            onLanguageSelected = { viewModel.setTargetLanguage(it) },
+            onLanguageSelected = { lang -> viewModel.setTargetLanguage(lang) },
             onTranslatePage = { viewModel.startPageTranslation() },
             onTranslateSelection = {
                 viewModel.hideTranslationSheet()
-                viewModel.translateSelectedانسخ الملفين وأرسل لي النتيجة!**Text()
+                viewModel.translateSelectedText()
             },
             onDismiss = { viewModel.hideTranslationSheet() }
         )
