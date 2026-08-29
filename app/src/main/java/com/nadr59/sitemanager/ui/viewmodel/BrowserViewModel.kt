@@ -4,9 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nadr59.sitemanager.data.model.BrowserState
 import com.nadr59.sitemanager.data.model.PageTextNode
-import com.n val pageTranslator = WebPageTranslator()
-
-    // ═adr59.sitemanager.data.model.TranslatedNode
+import com.nadr59.sitemanager.data.model.TranslatedNode
 import com.nadr59.sitemanager.data.repository.TranslationRepository
 import com.nadr59.sitemanager.domain.translator.WebPageTranslator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import javax.inject.Inject
 
 @HiltViewModel
@@ -22,25 +21,23 @@ class BrowserViewModel @Inject constructor(
     private val translationRepository: TranslationRepository
 ) : ViewModel() {
 
+    private val pageTranslator = WebPageTranslator()
+
     private val _uiState = MutableStateFlow(BrowserState())
     val uiState: StateFlow<BrowserState> = _uiState.asStateFlow()
 
-   ══ عقد الصفحة المستخرجة ═══
     private val _extractedNodes = MutableStateFlow<List<PageTextNode>>(emptyList())
     val extractedNodes: StateFlow<List<PageTextNode>> = _extractedNodes.asStateFlow()
 
-    // ═══ النتائج المترجمة ═══
     private val _translatedNodes = MutableStateFlow<List<TranslatedNode>>(emptyList())
     val translatedNodes: StateFlow<List<TranslatedNode>> = _translatedNodes.asStateFlow()
 
-    // ═══ النص المحدد ═══
     private val _selectedText = MutableStateFlow("")
     val selectedText: StateFlow<String> = _selectedText.asStateFlow()
 
     private val _selectedTranslation = MutableStateFlow("")
     val selectedTranslation: StateFlow<String> = _selectedTranslation.asStateFlow()
 
-    // ═══ طلب WebView ═══
     private val _pendingJs = MutableStateFlow<String?>(null)
     val pendingJs: StateFlow<String?> = _pendingJs.asStateFlow()
 
@@ -48,20 +45,14 @@ class BrowserViewModel @Inject constructor(
         _pendingJs.value = null
     }
 
-    // ═══ تحميل الموقع ═══
     fun loadUrl(url: String) {
         _uiState.update { it.copy(url = url) }
     }
 
     fun loadSite(siteId: Int) {
         // TODO: جلب من قاعدة البيانات
-        // viewModelScope.launch {
-        //     val site = siteRepository.getSiteById(siteId)
-        //     _uiState.update { it.copy(url = site.url, title = site.name) }
-        // }
     }
 
-    // ═══ تحديثات المتصفح ═══
     fun updateTitle(title: String) {
         _uiState.update { it.copy(title = title) }
     }
@@ -85,7 +76,6 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    // ═══ الترجمة ═══
     fun setTargetLanguage(language: String) {
         _uiState.update { it.copy(targetLanguage = language) }
     }
@@ -98,7 +88,6 @@ class BrowserViewModel @Inject constructor(
         _uiState.update { it.copy(showTranslationSheet = false) }
     }
 
-    // ═══ ترجمة الصفحة كاملة ═══
     fun startPageTranslation() {
         _uiState.update {
             it.copy(
@@ -108,8 +97,6 @@ class BrowserViewModel @Inject constructor(
                 showTranslationSheet = false
             )
         }
-
-        // أمر استخراج النصوص
         _pendingJs.value = pageTranslator.buildExtractScript()
     }
 
@@ -161,16 +148,54 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    // ═══ ترجمة النص المحدد ═══
     fun translateSelectedText() {
         _pendingJs.value = pageTranslator.buildSelectionScript()
     }
 
     fun onTextSelected(jsonString: String) {
         try {
-            val json = org.json.JSONObject(jsonString)
-            val text = json.getString("text")
+            val json = JSONObject(jsonString)
+            val text = json.optString("text", "")
+            if (text.isBlank()) return
+
+            _selectedText.value = text
+
+            viewModelScope.launch {
+                val result = translationRepository.translateText(
+                    text = text,
+                    targetLanguage = _uiState.value.targetLanguage
+                )
+                result.fold(
+                    onSuccess = { translated ->
+                        _selectedTranslation.value = translated
+                        val replaceScript = pageTranslator.buildReplaceSelectionScript(translated)
+                        _pendingJs.value = replaceScript
+                    },
+                    onFailure = { e ->
+                        _uiState.update {
+                            it.copy(error = "فشل ترجمة النص: ${e.message}")
+                        }
+                    }
+                )
+            }
+        } catch (_: Exception) {
+            // تجاهل أخطاء تحليل JSON
+        }
+    }
+
+    fun resetTranslation() {
+        _uiState.update {
+            it.copy(
+                isTranslationMode = false,
+                isTranslating = false,
+                translationProgress = 0f
+            )
+        }
+        _extractedNodes.value = emptyList()
+        _translatedNodes.value = emptyList()
+    }
+
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
-        }
+}
