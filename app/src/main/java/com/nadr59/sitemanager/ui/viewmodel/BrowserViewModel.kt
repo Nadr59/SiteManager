@@ -47,17 +47,13 @@ class BrowserViewModel @Inject constructor(
         _pendingJs.value = null
     }
 
-    // ═══ تحميل الموقع من قاعدة البيانات ═══
     fun loadSite(siteId: Int) {
         viewModelScope.launch {
             try {
                 val site = siteRepository.getSiteById(siteId)
                 if (site != null) {
                     _uiState.update {
-                        it.copy(
-                            url = site.url,
-                            title = site.name
-                        )
+                        it.copy(url = site.url, title = site.name)
                     }
                 } else {
                     _uiState.update {
@@ -66,7 +62,7 @@ class BrowserViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(error = "فشل تحميل الموقع: ${e.message}")
+                    it.copy(error = "فشل تحميل: ${e.message}")
                 }
             }
         }
@@ -81,8 +77,8 @@ class BrowserViewModel @Inject constructor(
     }
 
     fun updateProgress(progress: Int) {
-       < 100
-            )
+        _uiState.update {
+            it.copy(progress = progress, isLoading = progress < 100)
         }
     }
 
@@ -96,7 +92,6 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    // ═══ الترجمة ═══
     fun setTargetLanguage(language: String) {
         _uiState.update { it.copy(targetLanguage = language) }
     }
@@ -118,10 +113,7 @@ class BrowserViewModel @Inject constructor(
                 showTranslationSheet = false
             )
         }
-        _pendingJs.value = pageTranslator.build _uiState.update {
-            it.copy(
-                progress = progress,
-                isLoading = progress ExtractScript()
+        _pendingJs.value = pageTranslator.buildExtractScript()
     }
 
     fun onNodesExtracted(jsonString: String) {
@@ -130,10 +122,7 @@ class BrowserViewModel @Inject constructor(
 
         if (nodes.isEmpty()) {
             _uiState.update {
-                it.copy(
-                    isTranslating = false,
-                    error = "لم يتم العثور على نصوص للترجمة"
-                )
+                it.copy(isTranslating = false, error = "لم يتم العثور على نصوص")
             }
             return
         }
@@ -142,16 +131,14 @@ class BrowserViewModel @Inject constructor(
             val result = translationRepository.translatePageNodes(
                 nodes = nodes,
                 targetLanguage = _uiState.value.targetLanguage,
-                onProgress = { progress ->
-                    _uiState.update { it.copy(translationProgress = progress) }
+                onProgress = { p ->
+                    _uiState.update { it.copy(translationProgress = p) }
                 }
             )
-
             result.fold(
                 onSuccess = { translated ->
                     _translatedNodes.value = translated
-                    val replaceScript = pageTranslator.buildReplaceScript(translated)
-                    _pendingJs.value = replaceScript
+                    _pendingJs.value = pageTranslator.buildReplaceScript(translated)
                     _uiState.update {
                         it.copy(
                             isTranslating = false,
@@ -162,10 +149,7 @@ class BrowserViewModel @Inject constructor(
                 },
                 onFailure = { e ->
                     _uiState.update {
-                        it.copy(
-                            isTranslating = false,
-                            error = "فشل الترجمة: ${e.message}"
-                        )
+                        it.copy(isTranslating = false, error = "فشل: ${e.message}")
                     }
                 }
             )
@@ -181,9 +165,7 @@ class BrowserViewModel @Inject constructor(
             val json = JSONObject(jsonString)
             val text = json.optString("text", "")
             if (text.isBlank()) return
-
             _selectedText.value = text
-
             viewModelScope.launch {
                 val result = translationRepository.translateText(
                     text = text,
@@ -192,13 +174,10 @@ class BrowserViewModel @Inject constructor(
                 result.fold(
                     onSuccess = { translated ->
                         _selectedTranslation.value = translated
-                        val replaceScript = pageTranslator.buildReplaceSelectionScript(translated)
-                        _pendingJs.value = replaceScript
+                        _pendingJs.value = pageTranslator.buildReplaceSelectionScript(translated)
                     },
                     onFailure = { e ->
-                        _uiState.update {
-                            it.copy(error = "فشل ترجمة النص: ${e.message}")
-                        }
+                        _uiState.update { it.copy(error = "فشل: ${e.message}") }
                     }
                 )
             }
@@ -207,11 +186,7 @@ class BrowserViewModel @Inject constructor(
 
     fun resetTranslation() {
         _uiState.update {
-            it.copy(
-                isTranslationMode = false,
-                isTranslating = false,
-                translationProgress = 0f
-            )
+            it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f)
         }
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
@@ -220,4 +195,4 @@ class BrowserViewModel @Inject constructor(
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
-                }
+}
