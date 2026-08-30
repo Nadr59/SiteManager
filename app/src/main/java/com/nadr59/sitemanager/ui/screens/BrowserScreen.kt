@@ -31,15 +31,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.nadr59.sitemanager.viewmodel.BrowserViewModel
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun BrowserScreen(
     siteId: Int,
-    initialUrl: String = "",
-    viewModel: BrowserViewModel = hiltViewModel(),
+    viewModel: BrowserViewModel,
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -50,8 +48,6 @@ fun BrowserScreen(
     LaunchedEffect(siteId) {
         if (siteId > 0) {
             viewModel.loadSite(siteId)
-        } else if (initialUrl.isNotBlank()) {
-            viewModel.loadUrl(initialUrl)
         }
     }
 
@@ -172,7 +168,7 @@ fun BrowserScreen(
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "loading...",
+                            text = "Loading...",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
