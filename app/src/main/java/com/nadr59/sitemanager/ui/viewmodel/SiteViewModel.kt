@@ -11,17 +11,16 @@ import com.nadr59.sitemanager.data.remote.ApiClient
 import com.nadr59.sitemanager.data.remote.WebScraper
 import com.nadr59.sitemanager.data.repository.AnalyzerRepository
 import com.nadr59.sitemanager.data.repository.SiteRepository
-import com.nadr59.sitemanager.data.model.Site
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
 
 enum class SortOption(val label: String) {
     NEWEST("الأحدث"),
@@ -65,11 +64,20 @@ class SiteViewModel @Inject constructor(
     private val apiClient = ApiClient()
     val analyzerRepository = AnalyzerRepository(scraper, apiClient, dao)
 
+    // ═══ فلاتر البحث ═══
     private val _searchQuery = MutableStateFlow("")
     private val _selectedCategory = MutableStateFlow("الكل")
     private val _sortOption = MutableStateFlow(SortOption.NEWEST)
     private val _showFavoritesOnly = MutableStateFlow(false)
 
+    // ═══ حالة فتح الرابط ═══
+    private val _showOpenDialog = MutableStateFlow(false)
+    val showOpenDialog: StateFlow<Boolean> = _showOpenDialog.asStateFlow()
+
+    private val _selectedSiteForOpen = MutableStateFlow<SiteEntity?>(null)
+    val selectedSiteForOpen: StateFlow<SiteEntity?> = _selectedSiteForOpen.asStateFlow()
+
+    // ═══ حالة الواجهة ═══
     val uiState: StateFlow<HomeUiState> = combine(
         repository.getAllSites(),
         _searchQuery,
@@ -100,6 +108,7 @@ class SiteViewModel @Inject constructor(
         initialValue = HomeUiState(isLoading = true)
     )
 
+    // ═══ إحصائيات لوحة التحكم ═══
     val dashboardStats: StateFlow<DashboardStats> =
         combine(
             repository.getTotalCount(),
@@ -141,6 +150,7 @@ class SiteViewModel @Inject constructor(
             initialValue = DashboardStats()
         )
 
+    // ═══ فلترة المواقع ═══
     private fun applyFilters(
         sites: List<SiteEntity>,
         query: String,
@@ -183,11 +193,24 @@ class SiteViewModel @Inject constructor(
         return pinned + sortedUnpinned
     }
 
-    fun updateSearchQuery(query: String) { _searchQuery.value = query }
-    fun selectCategory(category: String) { _selectedCategory.value = category }
-    fun setSortOption(option: SortOption) { _sortOption.value = option }
-    fun toggleFavoritesOnly() { _showFavoritesOnly.value = !_showFavoritesOnly.value }
+    // ═══ تحديث الفلاتر ═══
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
 
+    fun selectCategory(category: String) {
+        _selectedCategory.value = category
+    }
+
+    fun setSortOption(option: SortOption) {
+        _sortOption.value = option
+    }
+
+    fun toggleFavoritesOnly() {
+        _showFavoritesOnly.value = !_showFavoritesOnly.value
+    }
+
+    // ═══ عمليات CRUD ═══
     fun addSite(site: SiteEntity) {
         viewModelScope.launch { repository.insertSite(site) }
     }
@@ -215,14 +238,17 @@ class SiteViewModel @Inject constructor(
     suspend fun checkDuplicate(url: String): Boolean {
         return repository.countByUrl(url) > 0
     }
-        // ═══ حالة اختيار فتح الرابط ═══
-    private val _showOpenDialog = MutableStateFlow(false)
-    val showOpenDialog: StateFlow<Boolean> = _showOpenDialog.asStateFlow()
 
-    private val _selectedSiteForOpen = MutableStateFlow<Site?>(null)
-    val selectedSiteForOpen: StateFlow<Site?> = _selectedSiteForOpen.asStateFlow()
+    // ═══ جلب موقع ═══
+    fun getSiteById(id: Int): Flow<SiteEntity?> = repository.getSiteByIdFlow(id)
 
-    fun requestOpenSite(site: Site) {
+    fun getAnalysesForSite(siteId: Int): Flow<List<SiteAnalysisEntity>> =
+        repository.getAnalysesForSite(siteId)
+
+    fun getAllCategories(): Flow<List<String>> = repository.getAllCategories()
+
+    // ═══ Dialog فتح الرابط ═══
+    fun requestOpenSite(site: SiteEntity) {
         _selectedSiteForOpen.value = site
         _showOpenDialog.value = true
     }
@@ -231,11 +257,4 @@ class SiteViewModel @Inject constructor(
         _showOpenDialog.value = false
         _selectedSiteForOpen.value = null
     }
-
-    fun getSiteById(id: Int): Flow<SiteEntity?> = repository.getSiteByIdFlow(id)
-
-    fun getAnalysesForSite(siteId: Int): Flow<List<SiteAnalysisEntity>> =
-        repository.getAnalysesForSite(siteId)
-
-    fun getAllCategories(): Flow<List<String>> = repository.getAllCategories()
 }
