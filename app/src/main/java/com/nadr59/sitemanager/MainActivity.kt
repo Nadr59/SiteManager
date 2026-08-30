@@ -1,5 +1,7 @@
 package com.nadr59.sitemanager
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,17 +25,26 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        var sharedUrl = ""
+        if (intent?.action == Intent.ACTION_SEND) {
+            sharedUrl = intent.getStringExtra(Intent.EXTRA_TEXT) ?: ""
+        }
+
         setContent {
             SiteManagerTheme {
-                MainNavHost()
+                MainNavHost(initialSharedUrl = sharedUrl)
             }
         }
     }
 }
 
 @Composable
-fun MainNavHost() {
+fun MainNavHost(initialSharedUrl: String = "") {
     val navController = rememberNavController()
+    val vm: SiteViewModel = hiltViewModel()
+
+    var sharedUrl by remember { mutableStateOf(initialSharedUrl) }
 
     NavHost(
         navController = navController,
@@ -41,19 +52,32 @@ fun MainNavHost() {
     ) {
         // ═══ الرئيسية ═══
         composable("home") {
-            val vm: SiteViewModel = hiltViewModel()
             HomeScreen(
-                navController = navController,
-                viewModel = vm
+                sharedUrl = sharedUrl,
+                onSharedUrlConsumed = { sharedUrl = "" },
+                onNavigateToAdd = { navController.navigate("add_site") },
+                onNavigateToAddWithUrl = { url ->
+                    navController.navigate("add_site?url=${Uri.encode(url)}")
+                },
+                onNavigateToSettings = { navController.navigate("settings") },
+                onNavigateToExport = { navController.navigate("export") },
+                onNavigateToAnalysis = { navController.navigate("analysis") },
+                onNavigateToEdit = { siteId ->
+                    navController.navigate("edit_site/$siteId")
+                },
+                onNavigateToDetail = { siteId ->
+                    navController.navigate("site_detail/$siteId")
+                },
+                onNavigateToDashboard = { siteId ->
+                    navController.navigate("dashboard/$siteId")
+                }
             )
         }
 
         // ═══ إضافة موقع ═══
         composable("add_site") {
-            val vm: SiteViewModel = hiltViewModel()
             AddSiteScreen(
-                navController = navController,
-                viewModel = vm
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -65,11 +89,12 @@ fun MainNavHost() {
             )
         ) { entry ->
             val siteId = entry.arguments?.getInt("siteId") ?: 0
-            val vm: SiteViewModel = hiltViewModel()
             SiteDetailScreen(
                 siteId = siteId,
-                navController = navController,
-                viewModel = vm
+                onBack = { navController.popBackStack() },
+                onOpenBrowser = { id ->
+                    navController.navigate("browser/$id")
+                }
             )
         }
 
@@ -81,11 +106,11 @@ fun MainNavHost() {
             )
         ) { entry ->
             val siteId = entry.arguments?.getInt("siteId") ?: 0
-            val vm: BrowserViewModel = hiltViewModel()
+            val browserVm: BrowserViewModel = hiltViewModel()
 
             BrowserScreen(
                 siteId = siteId,
-                viewModel = vm,
+                viewModel = browserVm,
                 onBack = { navController.popBackStack() }
             )
         }
