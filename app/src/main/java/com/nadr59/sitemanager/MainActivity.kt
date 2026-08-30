@@ -72,17 +72,17 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToExport = {
                     navController.navigate("export")
                 },
+                onNavigateToAnalysis = { siteId: Int, name: String, url: String ->
+                    navController.navigate("analysis/$siteId")
+                },
                 onNavigateToEdit = { siteId: Int ->
                     navController.navigate("edit_site/$siteId")
                 },
-                onNavigateToDetail = { siteId: Int, name: String, url: String ->
+                onNavigateToDetail = { siteId: Int ->
                     navController.navigate("site_detail/$siteId")
                 },
                 onNavigateToDashboard = {
                     navController.navigate("dashboard")
-                },
-                onNavigateToAnalysis = {
-                    navController.navigate("analysis")
                 }
             )
         }
@@ -99,7 +99,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
         ) { backStackEntry ->
             val prefilledUrl = backStackEntry.arguments?.getString("url")
             val addSiteVm: SiteViewModel = hiltViewModel()
-            
+
             AddSiteScreen(
                 viewModel = addSiteVm,
                 initialUrl = prefilledUrl,
@@ -120,8 +120,8 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 siteId = siteId,
                 viewModel = detailVm,
                 onBack = { navController.popBackStack() },
-                onOpenBrowser = {
-                    navController.navigate("browser/$siteId")
+                onOpenBrowser = { id ->
+                    navController.navigate("browser/$id")
                 }
             )
         }
