@@ -20,6 +20,8 @@ import com.nadr59.sitemanager.ui.screens.AddSiteScreen
 import com.nadr59.sitemanager.ui.screens.AnalysisScreen
 import com.nadr59.sitemanager.ui.screens.BrowserScreen
 import com.nadr59.sitemanager.ui.screens.DashboardScreen
+import com.nadr59.sitemanager.ui.screens.EditSiteScreen
+import com.nadr59.sitemanager.ui.screens.ExportImportScreen
 import com.nadr59.sitemanager.ui.screens.HomeScreen
 import com.nadr59.sitemanager.ui.screens.SettingsScreen
 import com.nadr59.sitemanager.ui.screens.SiteDetailScreen
@@ -50,13 +52,9 @@ class MainActivity : ComponentActivity() {
 fun MainNavHost(initialSharedUrl: String = "") {
     val navController = rememberNavController()
     val vm: SiteViewModel = hiltViewModel()
-
     var sharedUrl by remember { mutableStateOf(initialSharedUrl) }
 
-    NavHost(
-        navController = navController,
-        startDestination = "home"
-    ) {
+    NavHost(navController = navController, startDestination = "home") {
 
         // ═══ الرئيسية ═══
         composable("home") {
@@ -64,30 +62,22 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 viewModel = vm,
                 sharedUrl = sharedUrl,
                 onSharedUrlConsumed = { sharedUrl = "" },
-                onNavigateToAdd = {
-                    navController.navigate("add_site")
-                },
-                onNavigateToAddWithUrl = { url: String ->
+                onNavigateToAdd = { navController.navigate("add_site") },
+                onNavigateToAddWithUrl = { url ->
                     navController.navigate("add_site?url=${Uri.encode(url)}")
                 },
-                onNavigateToSettings = {
-                    navController.navigate("settings")
-                },
-                onNavigateToExport = {
-                    navController.navigate("export")
-                },
-                onNavigateToAnalysis = { siteId: Int, name: String, url: String ->
+                onNavigateToSettings = { navController.navigate("settings") },
+                onNavigateToExport = { navController.navigate("export") },
+                onNavigateToAnalysis = { siteId, _, _ ->
                     navController.navigate("analysis/$siteId")
                 },
-                onNavigateToEdit = { siteId: Int ->
+                onNavigateToEdit = { siteId ->
                     navController.navigate("edit_site/$siteId")
                 },
-                onNavigateToDetail = { siteId: Int ->
+                onNavigateToDetail = { siteId ->
                     navController.navigate("site_detail/$siteId")
                 },
-                onNavigateToDashboard = {
-                    navController.navigate("dashboard")
-                }
+                onNavigateToDashboard = { navController.navigate("dashboard") }
             )
         }
 
@@ -103,18 +93,37 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         ) { backStackEntry ->
             val prefilledUrl = backStackEntry.arguments?.getString("url")
-            val addSiteVm: SiteViewModel = hiltViewModel()
-
             AddSiteScreen(
-                viewModel = addSiteVm,
+                viewModel = hiltViewModel(),
                 initialUrl = prefilledUrl,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // ═══ تعديل موقع ═══
+        composable(
+            route = "edit_site/{siteId}",
+            arguments = listOf(
+                navArgument("siteId") { type = NavType.IntType }
+            )
+        ) { entry ->
+            val siteId = entry.arguments?.getInt("siteId") ?: 0
+            EditSiteScreen(
+                viewModel = hiltViewModel(),
+                siteId = siteId,
                 onBack = { navController.popBackStack() }
             )
         }
 
         // ═══ الإعدادات ═══
         composable("settings") {
-            SettingsScreen(
+            SettingsScreen(onBack = { navController.popBackStack() })
+        }
+
+        // ═══ تصدير واستيراد ═══
+        composable("export") {
+            ExportImportScreen(
+                viewModel = vm,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -135,11 +144,9 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         ) { entry ->
             val siteId = entry.arguments?.getInt("siteId") ?: 0
-            val analysisVm: SiteViewModel = hiltViewModel()
-
             AnalysisScreen(
                 siteId = siteId,
-                viewModel = analysisVm,
+                viewModel = hiltViewModel(),
                 onBack = { navController.popBackStack() }
             )
         }
@@ -152,15 +159,11 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         ) { entry ->
             val siteId = entry.arguments?.getInt("siteId") ?: 0
-            val detailVm: SiteViewModel = hiltViewModel()
-
             SiteDetailScreen(
                 siteId = siteId,
-                viewModel = detailVm,
+                viewModel = hiltViewModel(),
                 onBack = { navController.popBackStack() },
-                onOpenBrowser = { id ->
-                    navController.navigate("browser/$id")
-                }
+                onOpenBrowser = { id -> navController.navigate("browser/$id") }
             )
         }
 
@@ -172,11 +175,9 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         ) { entry ->
             val siteId = entry.arguments?.getInt("siteId") ?: 0
-            val browserVm: BrowserViewModel = hiltViewModel()
-
             BrowserScreen(
                 siteId = siteId,
-                viewModel = browserVm,
+                viewModel = hiltViewModel(),
                 onBack = { navController.popBackStack() }
             )
         }
