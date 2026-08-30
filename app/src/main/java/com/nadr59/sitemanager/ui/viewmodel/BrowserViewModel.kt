@@ -3,10 +3,7 @@ package com.nadr59.sitemanager.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.nadr59.sitemanager.data.local.BrowserState
 import com.nadr59.sitemanager.data.local.SiteDatabase
-import com.nadr59.sitemanager.data.local.PageTextNode
-import com.nadr59.sitemanager.data.local.TranslatedNode
 import com.nadr59.sitemanager.data.repository.SiteRepository
 import com.nadr59.sitemanager.data.repository.TranslationRepository
 import com.nadr59.sitemanager.domain.translator.WebPageTranslator
@@ -40,12 +37,6 @@ class BrowserViewModel @Inject constructor(
     private val _translatedNodes = MutableStateFlow<List<TranslatedNode>>(emptyList())
     val translatedNodes: StateFlow<List<TranslatedNode>> = _translatedNodes.asStateFlow()
 
-    private val _selectedText = MutableStateFlow("")
-    val selectedText: StateFlow<String> = _selectedText.asStateFlow()
-
-    private val _selectedTranslation = MutableStateFlow("")
-    val selectedTranslation: StateFlow<String> = _selectedTranslation.asStateFlow()
-
     private val _pendingJs = MutableStateFlow<String?>(null)
     val pendingJs: StateFlow<String?> = _pendingJs.asStateFlow()
 
@@ -68,7 +59,7 @@ class BrowserViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(error = "Failed to load: ${e.message}")
+                    it.copy(error = "Failed: ${e.message}")
                 }
             }
         }
@@ -171,7 +162,7 @@ class BrowserViewModel @Inject constructor(
             val json = JSONObject(jsonString)
             val text = json.optString("text", "")
             if (text.isBlank()) return
-            _selectedText.value = text
+
             viewModelScope.launch {
                 val result = translationRepository.translateText(
                     text = text,
@@ -179,7 +170,6 @@ class BrowserViewModel @Inject constructor(
                 )
                 result.fold(
                     onSuccess = { translated ->
-                        _selectedTranslation.value = translated
                         _pendingJs.value = pageTranslator.buildReplaceSelectionScript(translated)
                     },
                     onFailure = { e ->
@@ -192,7 +182,11 @@ class BrowserViewModel @Inject constructor(
 
     fun resetTranslation() {
         _uiState.update {
-            it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f)
+            it.copy(
+                isTranslationMode = false,
+                isTranslating = false,
+                translationProgress = 0f
+            )
         }
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
