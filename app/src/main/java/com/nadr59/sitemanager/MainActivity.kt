@@ -17,7 +17,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.nadr59.sitemanager.ui.screens.AddSiteScreen
+import com.nadr59.sitemanager.ui.screens.AnalysisScreen
 import com.nadr59.sitemanager.ui.screens.BrowserScreen
+import com.nadr59.sitemanager.ui.screens.DashboardScreen
 import com.nadr59.sitemanager.ui.screens.HomeScreen
 import com.nadr59.sitemanager.ui.screens.SettingsScreen
 import com.nadr59.sitemanager.ui.screens.SiteDetailScreen
@@ -56,6 +58,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
         startDestination = "home"
     ) {
 
+        // ═══ الرئيسية ═══
         composable("home") {
             HomeScreen(
                 viewModel = vm,
@@ -88,6 +91,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         }
 
+        // ═══ إضافة موقع ═══
         composable(
             route = "add_site?url={url}",
             arguments = listOf(
@@ -115,6 +119,32 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         }
 
+        // ═══ لوحة التحكم ═══
+        composable("dashboard") {
+            DashboardScreen(
+                viewModel = vm,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // ═══ تحليل الموقع ═══
+        composable(
+            route = "analysis/{siteId}",
+            arguments = listOf(
+                navArgument("siteId") { type = NavType.IntType }
+            )
+        ) { entry ->
+            val siteId = entry.arguments?.getInt("siteId") ?: 0
+            val analysisVm: SiteViewModel = hiltViewModel()
+
+            AnalysisScreen(
+                siteId = siteId,
+                viewModel = analysisVm,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // ═══ تفاصيل الموقع ═══
         composable(
             route = "site_detail/{siteId}",
             arguments = listOf(
@@ -134,6 +164,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         }
 
+        // ═══ المتصفح ═══
         composable(
             route = "browser/{siteId}",
             arguments = listOf(
