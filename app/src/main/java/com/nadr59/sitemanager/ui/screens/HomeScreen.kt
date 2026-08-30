@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Delete
@@ -52,8 +54,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
 import com.nadr59.sitemanager.viewmodel.SortOption
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -82,9 +87,11 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     var showSortMenu by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(sharedUrl) {
         if (sharedUrl.isNotBlank()) {
@@ -150,12 +157,19 @@ fun HomeScreen(
         },
         bottomBar = {
             NavigationBar {
+                // ═══ زر Sites — يعمل الآن ═══
                 NavigationBarItem(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = {
+                        selectedTab = 0
+                        scope.launch {
+                            listState.animateScrollToItem(0)
+                        }
+                    },
                     icon = { Icon(Icons.Default.Category, contentDescription = null) },
                     label = { Text("Sites") }
                 )
+                // ═══ زر Dashboard ═══
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = {
@@ -203,11 +217,6 @@ fun HomeScreen(
                 ) {
                     val allCategories = listOf("All") + uiState.categories
                     allCategories.forEach { cat ->
-                        val selected = if (cat == "All")
-                            uiState.selectedCategory == "الكل"
-                        else
-                            uiState.selectedCategory == cat
-
                         AssistChip(
                             onClick = {
                                 viewModel.selectCategory(
@@ -257,6 +266,7 @@ fun HomeScreen(
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
                         horizontal = 16.dp,
@@ -406,7 +416,7 @@ private fun SiteCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // الصف الأول: فتح داخلي + خارجي
+                // فتح داخلي + خارجي + تحليل
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -442,9 +452,23 @@ private fun SiteCard(
                                 .width(22.dp)
                         )
                     }
+
+                    // ═══ تحليل AI ═══
+                    IconButton(onClick = {
+                        onNavigateToAnalysis(site.id, site.name, site.url)
+                    }) {
+                        Icon(
+                            Icons.Default.Analytics,
+                            contentDescription = "Analyze",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier
+                                .height(22.dp)
+                                .width(22.dp)
+                        )
+                    }
                 }
 
-                // الصف الثاني: تعديل + تثبيت + حذف
+                // تعديل + تثبيت + حذف
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
