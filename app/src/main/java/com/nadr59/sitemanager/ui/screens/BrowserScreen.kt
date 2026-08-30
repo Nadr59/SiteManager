@@ -175,9 +175,10 @@ fun BrowserScreen(
                 }
             }
 
+            // ═══ FIX: Float not lambda ═══
             if (uiState.isLoading) {
                 LinearProgressIndicator(
-                    progress = { uiState.progress / 100f },
+                    progress = uiState.progress / 100f,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(3.dp)
@@ -223,7 +224,9 @@ fun BrowserScreen(
                 }
             }
 
-            uiState.error?.let { error ->
+            // ═══ FIX: if instead of let ═══
+            val error = uiState.error
+            if (error != null) {
                 Snackbar(
                     modifier = Modifier
                         .padding(16.dp)
