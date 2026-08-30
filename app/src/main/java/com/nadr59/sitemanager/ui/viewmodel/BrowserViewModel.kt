@@ -1,10 +1,12 @@
 package com.nadr59.sitemanager.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.nadr59.sitemanager.data.model.BrowserState
-import com.nadr59.sitemanager.data.model.PageTextNode
-import com.nadr59.sitemanager.data.model.TranslatedNode
+import com.nadr59.sitemanager.data.local.BrowserState
+import com.nadr59.sitemanager.data.local.SiteDatabase
+import com.nadr59.sitemanager.data.local.PageTextNode
+import com.nadr59.sitemanager.data.local.TranslatedNode
 import com.nadr59.sitemanager.data.repository.SiteRepository
 import com.nadr59.sitemanager.data.repository.TranslationRepository
 import com.nadr59.sitemanager.domain.translator.WebPageTranslator
@@ -19,9 +21,13 @@ import javax.inject.Inject
 
 @HiltViewModel
 class BrowserViewModel @Inject constructor(
-    private val translationRepository: TranslationRepository,
-    private val siteRepository: SiteRepository
-) : ViewModel() {
+    application: Application,
+    private val translationRepository: TranslationRepository
+) : AndroidViewModel(application) {
+
+    private val database = SiteDatabase.getDatabase(application)
+    private val dao = database.siteDao()
+    private val siteRepository = SiteRepository(dao)
 
     private val pageTranslator = WebPageTranslator()
 
@@ -57,12 +63,12 @@ class BrowserViewModel @Inject constructor(
                     }
                 } else {
                     _uiState.update {
-                        it.copy(error = "الموقع غير موجود")
+                        it.copy(error = "Site not found")
                     }
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(error = "فشل تحميل: ${e.message}")
+                    it.copy(error = "Failed to load: ${e.message}")
                 }
             }
         }
@@ -122,7 +128,7 @@ class BrowserViewModel @Inject constructor(
 
         if (nodes.isEmpty()) {
             _uiState.update {
-                it.copy(isTranslating = false, error = "لم يتم العثور على نصوص")
+                it.copy(isTranslating = false, error = "No text found")
             }
             return
         }
@@ -149,7 +155,7 @@ class BrowserViewModel @Inject constructor(
                 },
                 onFailure = { e ->
                     _uiState.update {
-                        it.copy(isTranslating = false, error = "فشل: ${e.message}")
+                        it.copy(isTranslating = false, error = "Failed: ${e.message}")
                     }
                 }
             )
@@ -177,7 +183,7 @@ class BrowserViewModel @Inject constructor(
                         _pendingJs.value = pageTranslator.buildReplaceSelectionScript(translated)
                     },
                     onFailure = { e ->
-                        _uiState.update { it.copy(error = "فشل: ${e.message}") }
+                        _uiState.update { it.copy(error = "Failed: ${e.message}") }
                     }
                 )
             }
