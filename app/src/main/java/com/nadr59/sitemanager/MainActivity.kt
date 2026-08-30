@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +55,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
         startDestination = "home"
     ) {
 
+        // ═══ الرئيسية ═══
         composable("home") {
             HomeScreen(
                 sharedUrl = sharedUrl,
@@ -61,7 +63,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToAdd = {
                     navController.navigate("add_site")
                 },
-                onNavigateToAddWithUrl = { url ->
+                onNavigateToAddWithUrl = { url: String ->
                     navController.navigate("add_site?url=${Uri.encode(url)}")
                 },
                 onNavigateToSettings = {
@@ -85,12 +87,14 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         }
 
+        // ═══ إضافة موقع ═══
         composable("add_site") {
             AddSiteScreen(
                 onBack = { navController.popBackStack() }
             )
         }
 
+        // ═══ تفاصيل الموقع ═══
         composable(
             route = "site_detail/{siteId}",
             arguments = listOf(
@@ -110,6 +114,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         }
 
+        // ═══ المتصفح الداخلي ═══
         composable(
             route = "browser/{siteId}",
             arguments = listOf(
