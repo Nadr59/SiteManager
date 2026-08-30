@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
 
@@ -23,13 +22,13 @@ import com.nadr59.sitemanager.viewmodel.SiteViewModel
 @Composable
 fun SiteDetailScreen(
     siteId: Int,
+    viewModel: SiteViewModel,
     onBack: () -> Unit,
-    onOpenBrowser: (Int) -> Unit,
-    viewModel: SiteViewModel = hiltViewModel()
+    onOpenBrowser: (Int) -> Unit
 ) {
     val context = LocalContext.current
-    val sites by viewModel.allSites.collectAsState()
-    val site: SiteEntity? = sites.find { it.id == siteId }
+    val uiState by viewModel.uiState.collectAsState()
+    val site: SiteEntity? = uiState.allSites.find { it.id == siteId }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
 
@@ -147,10 +146,7 @@ fun SiteDetailScreen(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
-                    Text(
-                        text = "Internal Browser",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = "Internal Browser", fontWeight = FontWeight.Bold)
                     Text(
                         text = "With translation support",
                         style = MaterialTheme.typography.bodySmall
@@ -177,10 +173,7 @@ fun SiteDetailScreen(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
-                    Text(
-                        text = "External Browser",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = "External Browser", fontWeight = FontWeight.Bold)
                     Text(
                         text = "Chrome, Firefox, etc.",
                         style = MaterialTheme.typography.bodySmall
