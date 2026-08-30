@@ -72,9 +72,6 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToExport = {
                     navController.navigate("export")
                 },
-                onNavigateToAnalysis = {
-                    navController.navigate("analysis")
-                },
                 onNavigateToEdit = { siteId: Int, name: String, url: String ->
                     navController.navigate("edit_site/$siteId")
                 },
@@ -83,6 +80,9 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 },
                 onNavigateToDashboard = { siteId: Int ->
                     navController.navigate("dashboard/$siteId")
+                },
+                onNavigateToAnalysis = {
+                    navController.navigate("analysis")
                 }
             )
         }
@@ -108,8 +108,8 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 siteId = siteId,
                 viewModel = detailVm,
                 onBack = { navController.popBackStack() },
-                onOpenBrowser = { id: Int ->
-                    navController.navigate("browser/$id")
+                onOpenBrowser = {
+                    navController.navigate("browser/$siteId")
                 }
             )
         }
