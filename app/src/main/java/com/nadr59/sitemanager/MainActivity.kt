@@ -5,14 +5,20 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.nadr59.sitemanager.ui.screens.*
+import com.nadr59.sitemanager.ui.screens.AddSiteScreen
+import com.nadr59.sitemanager.ui.screens.BrowserScreen
+import com.nadr59.sitemanager.ui.screens.HomeScreen
+import com.nadr59.sitemanager.ui.screens.SiteDetailScreen
 import com.nadr59.sitemanager.ui.theme.SiteManagerTheme
 import com.nadr59.sitemanager.viewmodel.BrowserViewModel
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
@@ -47,38 +53,44 @@ fun MainNavHost(initialSharedUrl: String = "") {
         navController = navController,
         startDestination = "home"
     ) {
-        // ═══ الرئيسية ═══
+
         composable("home") {
             HomeScreen(
                 sharedUrl = sharedUrl,
                 onSharedUrlConsumed = { sharedUrl = "" },
-                onNavigateToAdd = { navController.navigate("add_site") },
+                onNavigateToAdd = {
+                    navController.navigate("add_site")
+                },
                 onNavigateToAddWithUrl = { url ->
                     navController.navigate("add_site?url=${Uri.encode(url)}")
                 },
-                onNavigateToSettings = { navController.navigate("settings") },
-                onNavigateToExport = { navController.navigate("export") },
-                onNavigateToAnalysis = { navController.navigate("analysis") },
-                onNavigateToEdit = { siteId, name, url ->
+                onNavigateToSettings = {
+                    navController.navigate("settings")
+                },
+                onNavigateToExport = {
+                    navController.navigate("export")
+                },
+                onNavigateToAnalysis = {
+                    navController.navigate("analysis")
+                },
+                onNavigateToEdit = { siteId: Int, name: String, url: String ->
                     navController.navigate("edit_site/$siteId")
                 },
-                onNavigateToDetail = { siteId ->
+                onNavigateToDetail = { siteId: Int ->
                     navController.navigate("site_detail/$siteId")
                 },
-                onNavigateToDashboard = { siteId ->
+                onNavigateToDashboard = { siteId: Int ->
                     navController.navigate("dashboard/$siteId")
                 }
             )
         }
 
-        // ═══ إضافة موقع ═══
         composable("add_site") {
             AddSiteScreen(
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // ═══ تفاصيل الموقع ═══
         composable(
             route = "site_detail/{siteId}",
             arguments = listOf(
@@ -92,13 +104,12 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 siteId = siteId,
                 viewModel = detailVm,
                 onBack = { navController.popBackStack() },
-                onOpenBrowser = { id ->
+                onOpenBrowser = { id: Int ->
                     navController.navigate("browser/$id")
                 }
             )
         }
 
-        // ═══ المتصفح الداخلي ═══
         composable(
             route = "browser/{siteId}",
             arguments = listOf(
