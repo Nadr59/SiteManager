@@ -15,22 +15,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SiteDetailScreen(
     siteId: Int,
-    navController: NavController,
-    viewModel: SiteViewModel
+    onBack: () -> Unit,
+    onOpenBrowser: (Int) -> Unit,
+    viewModel: SiteViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val sites by viewModel.allSites.collectAsState()
-    val site = sites.find { it.id == siteId }
+    val site: SiteEntity? = sites.find { it.id == siteId }
 
     var showDeleteDialog by remember { mutableStateOf(false) }
-    var showOpenDialog by remember { mutableStateOf(false) }
 
     if (site == null) {
         Box(
@@ -47,15 +48,15 @@ fun SiteDetailScreen(
             TopAppBar(
                 title = { Text(text = site.name) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "رجوع")
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "back")
                     }
                 },
                 actions = {
                     IconButton(onClick = { showDeleteDialog = true }) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "حذف",
+                            contentDescription = "delete",
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -71,7 +72,6 @@ fun SiteDetailScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ═══ بطاقة معلومات الموقع ═══
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
@@ -127,18 +127,14 @@ fun SiteDetailScreen(
                 }
             }
 
-            // ═══ أزرار زيارة الموقع ═══
             Text(
-                text = "زيارة الموقع",
+                text = "Open Site",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
 
-            // ═══ زر المتصفح الداخلي ═══
             Button(
-                onClick = {
-                    navController.navigate("browser/${site.id}")
-                },
+                onClick = { onOpenBrowser(site.id) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -152,25 +148,22 @@ fun SiteDetailScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "فتح في المتصفح الداخلي",
+                        text = "Internal Browser",
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "مع دعم الترجمة",
+                        text = "With translation support",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
 
-            // ═══ زر المتصفح الخارجي ═══
             OutlinedButton(
                 onClick = {
                     try {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(site.url))
                         context.startActivity(intent)
-                    } catch (_: Exception) {
-                        // رابط غير صالح
-                    }
+                    } catch (_: Exception) {}
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -185,17 +178,16 @@ fun SiteDetailScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "فتح في المتصفح الخارجي",
+                        text = "External Browser",
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Chrome, Firefox, إلخ",
+                        text = "Chrome, Firefox, etc.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
 
-            // ═══ زر نسخ الرابط ═══
             OutlinedButton(
                 onClick = {
                     val clipboard = context.getSystemService(
@@ -216,33 +208,32 @@ fun SiteDetailScreen(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "نسخ الرابط")
+                Text(text = "Copy URL")
             }
 
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
-    // ═══ Dialog تأكيد الحذف ═══
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("حذف الموقع") },
-            text = { Text("هل أنت متأكد من حذف \"${site.name}\"؟") },
+            title = { Text("Delete Site") },
+            text = { Text("Delete \"${site.name}\"?") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         viewModel.deleteSite(site)
                         showDeleteDialog = false
-                        navController.popBackStack()
+                        onBack()
                     }
                 ) {
-                    Text("حذف", color = MaterialTheme.colorScheme.error)
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("إلغاء")
+                    Text("Cancel")
                 }
             }
         )
