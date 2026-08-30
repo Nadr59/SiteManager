@@ -1,863 +1,214 @@
 package com.nadr59.sitemanager.ui.screens
 
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.nadr59.sitemanager.data.local.AnalysisType
-import com.nadr59.sitemanager.data.remote.AnalysisResult
+import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
-import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalysisScreen(
     siteId: Int,
-    siteName: String,
-    siteUrl: String,
-    analysisTypeKey: String = "explain",
-    onBack: () -> Unit,
-    viewModel: SiteViewModel
+    viewModel: SiteViewModel,
+    onBack: () -> Unit
 ) {
-    val initialType = AnalysisType.fromKey(analysisTypeKey)
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val uiState by viewModel.uiState.collectAsState()
+    val site: SiteEntity? = uiState.allSites.find { it.id == siteId }
 
-    // ═══ حالات الشاشة ═══
-    var currentAnalysisType by remember { mutableStateOf(initialType) }
-    var isLoading by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<AnalysisResult?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var customQuestion by remember { mutableStateOf("") }
-    var hasStarted by remember { mutableStateOf(false) }
-
-    // ═══ بدء التحليل ═══
-    fun startAnalysis(type: AnalysisType = currentAnalysisType, question: String = "") {
-        currentAnalysisType = type
-        scope.launch {
-            isLoading = true
-            error = null
-            result = null
-            hasStarted = true
-
-            val response = viewModel.analyzerRepository.analyze(
-                siteId = siteId,
-                analysisType = type,
-                customQuestion = question
-            )
-
-            response.fold(
-                onSuccess = { analysisResult ->
-                    result = analysisResult
-                    isLoading = false
-                },
-                onFailure = { e ->
-                    error = e.message ?: "حدث خطأ غير متوقع"
-                    isLoading = false
-                }
-            )
-        }
-    }
-
-    // ═══ تحميل التحليل المخزن مسبقاً ═══
-    LaunchedEffect(siteId, analysisTypeKey) {
-        val cached = viewModel.analyzerRepository.getCachedAnalysis(siteId, initialType)
-        if (cached != null) {
-            result = cached
-            currentAnalysisType = initialType
-        }
-    }
+    var isAnalyzing by remember { mutableStateOf(false) }
+    var analysisResult by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            currentAnalysisType.displayName,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                        Text(
-                            siteName,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                },
+                title = { Text("Site Analysis", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "رجوع"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            try {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(siteUrl))
-                                )
-                            } catch (_: Exception) {}
-                        }
-                    ) {
-                        Icon(Icons.Default.Language, contentDescription = "فتح الموقع")
-                    }
-                    if (result != null) {
-                        IconButton(onClick = { startAnalysis(currentAnalysisType, customQuestion) }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "إعادة التحليل")
-                        }
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
         }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (site == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+                return@Scaffold
+            }
 
-            // ═══════════════════════════════════
-            // رأس نوع التحليل
-            // ═══════════════════════════════════
-            item {
+            // ═══ معلومات الموقع ═══
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = site.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = site.url,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (site.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = site.description,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            // ═══ زر التحليل ═══
+            Button(
+                onClick = {
+                    isAnalyzing = true
+                    errorMessage = null
+                    analysisResult = null
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(12.dp),
+                enabled = !isAnalyzing
+            ) {
+                if (isAnalyzing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .height(24.dp)
+                            .width(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Analyzing...")
+                } else {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Analyze with AI", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // ═══ نتيجة التحليل ═══
+            if (analysisResult != null) {
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(currentAnalysisType.emoji, fontSize = 32.sp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                currentAnalysisType.displayName,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                            Text(
-                                siteUrl,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(
-                                    alpha = 0.7f
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ═══════════════════════════════════
-            // حقل السؤال المخصص
-            // ═══════════════════════════════════
-            if (currentAnalysisType == AnalysisType.CUSTOM) {
-                item {
-                    Card(
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                "اسأل أي سؤال عن هذا الموقع",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = customQuestion,
-                                onValueChange = { customQuestion = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = {
-                                    Text("مثال: هل هذا الموقع مناسب للأطفال؟")
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                minLines = 2,
-                                maxLines = 4
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Button(
-                                onClick = {
-                                    if (customQuestion.isNotBlank()) {
-                                        startAnalysis(
-                                            type = AnalysisType.CUSTOM,
-                                            question = customQuestion
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = customQuestion.isNotBlank() && !isLoading,
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Send,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text("إرسال السؤال")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ═══════════════════════════════════
-            // زر بدء التحليل
-            // ═══════════════════════════════════
-            if (currentAnalysisType != AnalysisType.CUSTOM &&
-                result == null &&
-                !isLoading &&
-                !hasStarted
-            ) {
-                item {
-                    Card(
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(currentAnalysisType.emoji, fontSize = 48.sp)
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                currentAnalysisType.displayName,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "اضغط الزر أدناه لبدء تحليل الموقع",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = { startAnalysis(currentAnalysisType) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text("بدء التحليل", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ═══════════════════════════════════
-            // حالة التحميل
-            // ═══════════════════════════════════
-            if (isLoading) {
-                item {
-                    Card(
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(48.dp),
-                                strokeWidth = 4.dp
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Text(
-                                "جارٍ ${currentAnalysisType.displayName}...",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "قد يستغرق هذا بضع ثوانٍ",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ═══════════════════════════════════
-            // رسالة الخطأ
-            // ═══════════════════════════════════
-            if (error != null && !isLoading) {
-                item {
-                    Card(
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.Error,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp),
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                "خطأ في التحليل",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                error ?: "",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onErrorContainer.copy(
-                                    alpha = 0.8f
-                                )
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = {
-                                    startAnalysis(currentAnalysisType, customQuestion)
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error
-                                ),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text("إعادة المحاولة")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ═══════════════════════════════════
-            // عرض النتائج
-            // ═══════════════════════════════════
-            result?.let { r ->
-
-                // التقييم
-                if (r.rating > 0f) {
-                    item { RatingCard(rating = r.rating) }
-                }
-
-                // النظرة العامة
-                if (r.overview.isNotBlank()) {
-                    item {
-                        AnalysisSection(
-                            title = "النظرة العامة",
-                            emoji = "📋",
-                            content = r.overview
-                        )
-                    }
-                }
-
-                // الغرض
-                if (r.purpose.isNotBlank()) {
-                    item {
-                        AnalysisSection(
-                            title = "الغرض من الموقع",
-                            emoji = "🎯",
-                            content = r.purpose
-                        )
-                    }
-                }
-
-                // الميزات
-                if (r.features.isNotEmpty()) {
-                    item {
-                        AnalysisListSection(
-                            title = "الميزات والخصائص",
-                            emoji = "⭐",
-                            items = r.features
-                        )
-                    }
-                }
-
-                // التقنيات
-                if (r.techStack.isNotEmpty()) {
-                    item {
-                        AnalysisListSection(
-                            title = "التقنيات المستخدمة",
-                            emoji = "⚙️",
-                            items = r.techStack
-                        )
-                    }
-                }
-
-                // طريقة الاستخدام
-                if (r.howToUse.isNotBlank()) {
-                    item {
-                        AnalysisSection(
-                            title = "كيفية الاستخدام",
-                            emoji = "📖",
-                            content = r.howToUse
-                        )
-                    }
-                }
-
-                // الأمثلة
-                if (r.examples.isNotBlank()) {
-                    item {
-                        AnalysisSection(
-                            title = "أمثلة",
-                            emoji = "💡",
-                            content = r.examples
-                        )
-                    }
-                }
-
-                // الإيجابيات
-                if (r.prosAndCons.pros.isNotEmpty()) {
-                    item {
-                        ProsConsCard(
-                            title = "الإيجابيات",
-                            emoji = "✅",
-                            items = r.prosAndCons.pros,
-                            isPositive = true
-                        )
-                    }
-                }
-
-                // السلبيات
-                if (r.prosAndCons.cons.isNotEmpty()) {
-                    item {
-                        ProsConsCard(
-                            title = "السلبيات",
-                            emoji = "⚠️",
-                            items = r.prosAndCons.cons,
-                            isPositive = false
-                        )
-                    }
-                }
-
-                // النص الكامل عند عدم وجود أقسام
-                if (r.rawMarkdown.isNotBlank() &&
-                    r.overview.isBlank() &&
-                    r.purpose.isBlank()
-                ) {
-                    item {
-                        AnalysisSection(
-                            title = "نتيجة التحليل",
-                            emoji = currentAnalysisType.emoji,
-                            content = r.rawMarkdown
-                        )
-                    }
-                }
-
-                // ═══════════════════════════════════
-                // أزرار إضافية
-                // ═══════════════════════════════════
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                startAnalysis(currentAnalysisType, customQuestion)
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text("إعادة التحليل")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        "تحليل ${currentAnalysisType.displayName} لموقع: $siteName\n$siteUrl\n\n${r.rawMarkdown}"
-                                    )
-                                }
-                                context.startActivity(
-                                    Intent.createChooser(intent, "مشاركة التحليل")
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("مشاركة")
-                        }
-                    }
-                }
-
-                // ═══════════════════════════════════
-                // تحليلات أخرى
-                // ═══════════════════════════════════
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "تحليلات أخرى",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        AnalysisType.entries
-                            .filter { it != currentAnalysisType }
-                            .forEach { type ->
-                                Surface(
-                                    onClick = {
-                                        startAnalysis(
-                                            type = type,
-                                            question = if (type == AnalysisType.CUSTOM) customQuestion else ""
-                                        )
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(
-                                            horizontal = 12.dp,
-                                            vertical = 8.dp
-                                        ),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(type.emoji, fontSize = 14.sp)
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            type.displayName,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
-                            }
-                    }
-                }
-            }
-
-            item { Spacer(Modifier.height(32.dp)) }
-        }
-    }
-}
-
-// ═══════════════════════════════════════════════════════════
-// بطاقات النتائج الفرعية
-// ═══════════════════════════════════════════════════════════
-
-@Composable
-private fun RatingCard(rating: Float) {
-    val color = when {
-        rating >= 8f -> MaterialTheme.colorScheme.primary
-        rating >= 5f -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.error
-    }
-    val label = when {
-        rating >= 8f -> "ممتاز"
-        rating >= 6f -> "جيد"
-        rating >= 4f -> "مقبول"
-        else -> "ضعيف"
-    }
-
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.1f)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(28.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                String.format("%.1f", rating),
-                fontWeight = FontWeight.Black,
-                fontSize = 32.sp,
-                color = color
-            )
-            Text(
-                " / 10",
-                fontWeight = FontWeight.Medium,
-                fontSize = 18.sp,
-                color = color.copy(alpha = 0.6f)
-            )
-            Spacer(Modifier.width(12.dp))
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = color.copy(alpha = 0.15f)
-            ) {
-                Text(
-                    label,
-                    modifier = Modifier.padding(
-                        horizontal = 12.dp,
-                        vertical = 4.dp
-                    ),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = color
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AnalysisSection(
-    title: String,
-    emoji: String,
-    content: String
-) {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(emoji, fontSize = 18.sp)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                content,
-                fontSize = 14.sp,
-                lineHeight = 22.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun AnalysisListSection(
-    title: String,
-    emoji: String,
-    items: List<String>
-) {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(emoji, fontSize = 18.sp)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            items.forEachIndexed { index, item ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        modifier = Modifier.padding(top = 2.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "${index + 1}",
-                            modifier = Modifier.padding(
-                                horizontal = 6.dp,
-                                vertical = 1.dp
-                            ),
-                            fontSize = 10.sp,
+                            "Analysis Result",
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = analysisResult ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        item,
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                    )
                 }
             }
+
+            // ═══ خطأ ═══
+            if (errorMessage != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Error",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = errorMessage ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
+            // ═══ معلومات إضافية ═══
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "Site Info",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    InfoRow("Category", site.category.ifBlank { "None" })
+                    InfoRow("Visits", "${site.visitCount}")
+                    InfoRow("Favorite", if (site.isFavorite) "Yes" else "No")
+                    InfoRow("Pinned", if (site.isPinned) "Yes" else "No")
+                    if (site.tags.isNotBlank()) {
+                        InfoRow("Tags", site.tags)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-private fun ProsConsCard(
-    title: String,
-    emoji: String,
-    items: List<String>,
-    isPositive: Boolean
-) {
-    val accentColor = if (isPositive) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.error
-    }
-
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(emoji, fontSize = 18.sp)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = accentColor
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            items.forEach { item ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 3.dp)
-                ) {
-                    Text(
-                        if (isPositive) "+" else "-",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = accentColor,
-                        modifier = Modifier.width(20.dp)
-                    )
-                    Text(
-                        item,
-                        fontSize = 13.sp,
-                        lineHeight = 20.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                    )
-                }
-            }
-        }
+        Text(
+            label,
+            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(100.dp)
+        )
+        Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
