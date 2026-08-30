@@ -5,10 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -62,7 +59,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToSettings = { navController.navigate("settings") },
                 onNavigateToExport = { navController.navigate("export") },
                 onNavigateToAnalysis = { navController.navigate("analysis") },
-                onNavigateToEdit = { siteId ->
+                onNavigateToEdit = { siteId, name, url ->
                     navController.navigate("edit_site/$siteId")
                 },
                 onNavigateToDetail = { siteId ->
@@ -89,8 +86,11 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         ) { entry ->
             val siteId = entry.arguments?.getInt("siteId") ?: 0
+            val detailVm: SiteViewModel = hiltViewModel()
+
             SiteDetailScreen(
                 siteId = siteId,
+                viewModel = detailVm,
                 onBack = { navController.popBackStack() },
                 onOpenBrowser = { id ->
                     navController.navigate("browser/$id")
