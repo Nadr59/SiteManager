@@ -51,17 +51,27 @@ fun BrowserScreen(
         }
     }
 
+        // ═══ في LaunchedEffect(pendingJs) ═══
     LaunchedEffect(pendingJs) {
         val script = pendingJs
         if (script != null && webView != null) {
             webView?.evaluateJavascript(script) { result ->
                 viewModel.onJsExecuted()
+
                 if (result != null && result != "null" && result.isNotBlank()) {
+                    val cleanResult = result
+                        .removePrefix("\"")
+                        .removeSuffix("\"")
+                        .replace("\\\"", "\"")
+                        .replace("\\\\", "\\")
+
                     when {
-                        result.startsWith("\"[{") || result.startsWith("[{") -> {
+                        // ═══ نصوص مستخرجة من الصفحة ═══
+                        cleanResult.trimStart().startsWith("[") -> {
                             viewModel.onNodesExtracted(result)
                         }
-                        result.contains("\"text\"") -> {
+                        // ═══ نص محدد ═══
+                        cleanResult.contains("\"text\"") -> {
                             viewModel.onTextSelected(result)
                         }
                     }
@@ -69,6 +79,7 @@ fun BrowserScreen(
             }
         }
     }
+    
 
     Scaffold(
         topBar = {
