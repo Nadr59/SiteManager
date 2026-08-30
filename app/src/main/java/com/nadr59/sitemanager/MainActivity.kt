@@ -72,7 +72,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToExport = {
                     navController.navigate("export")
                 },
-                onNavigateToEdit = { siteId: Int ->
+                onNavigateToEdit = { siteId: Int, name: String, url: String ->
                     navController.navigate("edit_site/$siteId")
                 },
                 onNavigateToDetail = { siteId: Int ->
