@@ -71,14 +71,14 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToExport = {
                     navController.navigate("export")
                 },
-                onNavigateToEdit = { siteId: Int ->
+                onNavigateToEdit = { siteId: Int, name: String, url: String ->
                     navController.navigate("edit_site/$siteId")
                 },
                 onNavigateToDetail = {
                     navController.navigate("site_detail")
                 },
-                onNavigateToDashboard = { siteId: Int, name: String, url: String ->
-                    navController.navigate("dashboard/$siteId")
+                onNavigateToDashboard = {
+                    navController.navigate("dashboard")
                 },
                 onNavigateToAnalysis = {
                     navController.navigate("analysis")
