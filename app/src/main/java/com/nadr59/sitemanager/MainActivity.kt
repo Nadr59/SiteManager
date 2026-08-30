@@ -71,7 +71,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToExport = {
                     navController.navigate("export")
                 },
-                onNavigateToEdit = { siteId: Int, name: String, url: String ->
+                onNavigateToEdit = { siteId: Int ->
                     navController.navigate("edit_site/$siteId")
                 },
                 onNavigateToDetail = {
@@ -105,8 +105,8 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 siteId = siteId,
                 viewModel = detailVm,
                 onBack = { navController.popBackStack() },
-                onOpenBrowser = {
-                    navController.navigate("browser/$siteId")
+                onOpenBrowser = { id: Int, name: String, url: String ->
+                    navController.navigate("browser/$id")
                 }
             )
         }
