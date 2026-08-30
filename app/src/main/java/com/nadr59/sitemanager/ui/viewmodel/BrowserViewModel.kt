@@ -28,7 +28,6 @@ class BrowserViewModel @Inject constructor(
     private val database = SiteDatabase.getDatabase(application)
     private val dao = database.siteDao()
     private val siteRepository = SiteRepository(dao)
-
     private val pageTranslator = WebPageTranslator()
 
     private val _uiState = MutableStateFlow(BrowserState())
@@ -43,75 +42,39 @@ class BrowserViewModel @Inject constructor(
     private val _pendingJs = MutableStateFlow<String?>(null)
     val pendingJs: StateFlow<String?> = _pendingJs.asStateFlow()
 
-    fun onJsExecuted() {
-        _pendingJs.value = null
-    }
+    fun onJsExecuted() { _pendingJs.value = null }
 
     fun loadSite(siteId: Int) {
         viewModelScope.launch {
             try {
                 val site = siteRepository.getSiteById(siteId)
                 if (site != null) {
-                    _uiState.update {
-                        it.copy(url = site.url, title = site.name)
-                    }
+                    _uiState.update { it.copy(url = site.url, title = site.name) }
                 } else {
-                    _uiState.update {
-                        it.copy(error = "Site not found")
-                    }
+                    _uiState.update { it.copy(error = "Site not found") }
                 }
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(error = "Failed: ${e.message}")
-                }
+                _uiState.update { it.copy(error = "Failed: ${e.message}") }
             }
         }
     }
 
-    fun loadUrl(url: String) {
-        _uiState.update { it.copy(url = url) }
-    }
-
-    fun updateTitle(title: String) {
-        _uiState.update { it.copy(title = title) }
-    }
-
+    fun loadUrl(url: String) { _uiState.update { it.copy(url = url) } }
+    fun updateTitle(title: String) { _uiState.update { it.copy(title = title) } }
     fun updateProgress(progress: Int) {
-        _uiState.update {
-            it.copy(progress = progress, isLoading = progress < 100)
-        }
+        _uiState.update { it.copy(progress = progress, isLoading = progress < 100) }
     }
-
-    fun setLoading(isLoading: Boolean) {
-        _uiState.update { it.copy(isLoading = isLoading) }
-    }
-
+    fun setLoading(isLoading: Boolean) { _uiState.update { it.copy(isLoading = isLoading) } }
     fun updateNavigation(canGoBack: Boolean, canGoForward: Boolean) {
-        _uiState.update {
-            it.copy(canGoBack = canGoBack, canGoForward = canGoForward)
-        }
+        _uiState.update { it.copy(canGoBack = canGoBack, canGoForward = canGoForward) }
     }
-
-    fun setTargetLanguage(language: String) {
-        _uiState.update { it.copy(targetLanguage = language) }
-    }
-
-    fun showTranslationSheet() {
-        _uiState.update { it.copy(showTranslationSheet = true) }
-    }
-
-    fun hideTranslationSheet() {
-        _uiState.update { it.copy(showTranslationSheet = false) }
-    }
+    fun setTargetLanguage(language: String) { _uiState.update { it.copy(targetLanguage = language) } }
+    fun showTranslationSheet() { _uiState.update { it.copy(showTranslationSheet = true) } }
+    fun hideTranslationSheet() { _uiState.update { it.copy(showTranslationSheet = false) } }
 
     fun startPageTranslation() {
         _uiState.update {
-            it.copy(
-                isTranslating = true,
-                translationProgress = 0f,
-                error = null,
-                showTranslationSheet = false
-            )
+            it.copy(isTranslating = true, translationProgress = 0f, error = null, showTranslationSheet = false)
         }
         _pendingJs.value = pageTranslator.buildExtractScript()
     }
@@ -121,9 +84,7 @@ class BrowserViewModel @Inject constructor(
         _extractedNodes.value = nodes
 
         if (nodes.isEmpty()) {
-            _uiState.update {
-                it.copy(isTranslating = false, error = "No text found")
-            }
+            _uiState.update { it.copy(isTranslating = false, error = "No text found") }
             return
         }
 
@@ -131,41 +92,30 @@ class BrowserViewModel @Inject constructor(
             val result = translationRepository.translatePageNodes(
                 nodes = nodes,
                 targetLanguage = _uiState.value.targetLanguage,
-                onProgress = { p ->
-                    _uiState.update { it.copy(translationProgress = p) }
-                }
+                onProgress = { p -> _uiState.update { it.copy(translationProgress = p) } }
             )
             result.fold(
                 onSuccess = { translated: List<TranslatedNode> ->
                     _translatedNodes.value = translated
                     _pendingJs.value = pageTranslator.buildReplaceScript(translated)
                     _uiState.update {
-                        it.copy(
-                            isTranslating = false,
-                            isTranslationMode = true,
-                            translationProgress = 1f
-                        )
+                        it.copy(isTranslating = false, isTranslationMode = true, translationProgress = 1f)
                     }
                 },
                 onFailure = { e ->
-                    _uiState.update {
-                        it.copy(isTranslating = false, error = "Failed: ${e.message}")
-                    }
+                    _uiState.update { it.copy(isTranslating = false, error = "Failed: ${e.message}") }
                 }
             )
         }
     }
 
-    fun translateSelectedText() {
-        _pendingJs.value = pageTranslator.buildSelectionScript()
-    }
+    fun translateSelectedText() { _pendingJs.value = pageTranslator.buildSelectionScript() }
 
     fun onTextSelected(jsonString: String) {
         try {
             val json = JSONObject(jsonString)
             val text = json.optString("text", "")
             if (text.isBlank()) return
-
             viewModelScope.launch {
                 val result = translationRepository.translateText(
                     text = text,
@@ -185,17 +135,11 @@ class BrowserViewModel @Inject constructor(
 
     fun resetTranslation() {
         _uiState.update {
-            it.copy(
-                isTranslationMode = false,
-                isTranslating = false,
-                translationProgress = 0f
-            )
+            it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f)
         }
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
-    }
+    fun clearError() { _uiState.update { it.copy(error = null) } }
 }
