@@ -19,6 +19,7 @@ import androidx.navigation.navArgument
 import com.nadr59.sitemanager.ui.screens.AddSiteScreen
 import com.nadr59.sitemanager.ui.screens.BrowserScreen
 import com.nadr59.sitemanager.ui.screens.HomeScreen
+import com.nadr59.sitemanager.ui.screens.SettingsScreen
 import com.nadr59.sitemanager.ui.screens.SiteDetailScreen
 import com.nadr59.sitemanager.ui.theme.SiteManagerTheme
 import com.nadr59.sitemanager.viewmodel.BrowserViewModel
@@ -103,6 +104,13 @@ fun MainNavHost(initialSharedUrl: String = "") {
             AddSiteScreen(
                 viewModel = addSiteVm,
                 initialUrl = prefilledUrl,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // ═══ الإعدادات ═══
+        composable("settings") {
+            SettingsScreen(
                 onBack = { navController.popBackStack() }
             )
         }
