@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nadr59.sitemanager.data.local.SiteDatabase
+import com.nadr59.sitemanager.data.model.BrowserState
+import com.nadr59.sitemanager.data.model.PageTextNode
+import com.nadr59.sitemanager.data.model.TranslatedNode
 import com.nadr59.sitemanager.data.repository.SiteRepository
 import com.nadr59.sitemanager.data.repository.TranslationRepository
 import com.nadr59.sitemanager.domain.translator.WebPageTranslator
@@ -114,7 +117,7 @@ class BrowserViewModel @Inject constructor(
     }
 
     fun onNodesExtracted(jsonString: String) {
-        val nodes = pageTranslator.parseExtractedNodes(jsonString)
+        val nodes: List<PageTextNode> = pageTranslator.parseExtractedNodes(jsonString)
         _extractedNodes.value = nodes
 
         if (nodes.isEmpty()) {
@@ -133,7 +136,7 @@ class BrowserViewModel @Inject constructor(
                 }
             )
             result.fold(
-                onSuccess = { translated ->
+                onSuccess = { translated: List<TranslatedNode> ->
                     _translatedNodes.value = translated
                     _pendingJs.value = pageTranslator.buildReplaceScript(translated)
                     _uiState.update {
