@@ -55,7 +55,6 @@ fun MainNavHost(initialSharedUrl: String = "") {
         startDestination = "home"
     ) {
 
-        // ═══ الرئيسية ═══
         composable("home") {
             HomeScreen(
                 sharedUrl = sharedUrl,
@@ -72,13 +71,13 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToExport = {
                     navController.navigate("export")
                 },
-                onNavigateToEdit = { siteId: Int, name: String, url: String ->
+                onNavigateToEdit = { siteId: Int ->
                     navController.navigate("edit_site/$siteId")
                 },
-                onNavigateToDetail = { siteId: Int ->
-                    navController.navigate("site_detail/$siteId")
+                onNavigateToDetail = {
+                    navController.navigate("site_detail")
                 },
-                onNavigateToDashboard = { siteId: Int ->
+                onNavigateToDashboard = { siteId: Int, name: String, url: String ->
                     navController.navigate("dashboard/$siteId")
                 },
                 onNavigateToAnalysis = {
@@ -87,14 +86,12 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         }
 
-        // ═══ إضافة موقع ═══
         composable("add_site") {
             AddSiteScreen(
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // ═══ تفاصيل الموقع ═══
         composable(
             route = "site_detail/{siteId}",
             arguments = listOf(
@@ -114,7 +111,6 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         }
 
-        // ═══ المتصفح الداخلي ═══
         composable(
             route = "browser/{siteId}",
             arguments = listOf(
