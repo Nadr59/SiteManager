@@ -7,19 +7,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nadr59.sitemanager.data.local.AnalysisType
 import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,7 +30,9 @@ fun AnalysisScreen(
 
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisResult by remember { mutableStateOf<String?>(null) }
+    var analysisRating by remember { mutableStateOf(0f) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedType by remember { mutableStateOf(AnalysisType.EXPLAIN) }
 
     Scaffold(
         topBar = {
@@ -94,6 +92,40 @@ fun AnalysisScreen(
                 }
             }
 
+            // ═══ اختيار نوع التحليل ═══
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "Analysis Type",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    AnalysisType.entries.forEach { type ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedType == type,
+                                onClick = { selectedType = type }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = type.displayName,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            }
+
             // ═══ زر التحليل بالذكاء الاصطناعي ═══
             Button(
                 onClick = {
@@ -103,10 +135,14 @@ fun AnalysisScreen(
 
                     scope.launch {
                         try {
-                            val result = viewModel.analyzerRepository.analyzeSite(site.url)
+                            val result = viewModel.analyzerRepository.analyze(
+                                siteId = siteId,
+                                analysisType = selectedType
+                            )
                             result.fold(
                                 onSuccess = { analysis ->
-                                    analysisResult = analysis
+                                    analysisResult = analysis.rawMarkdown
+                                    analysisRating = analysis.rating
                                     isAnalyzing = false
                                 },
                                 onFailure = { e ->
@@ -140,6 +176,38 @@ fun AnalysisScreen(
                     Icon(Icons.Default.AutoAwesome, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Analyze with AI", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // ═══ التقييم ═══
+            if (analysisRating > 0f) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Rating: ",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                        Text(
+                            text = "${analysisRating}/10",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
                 }
             }
 
@@ -199,14 +267,6 @@ fun AnalysisScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = {
-                                errorMessage = null
-                            }
-                        ) {
-                            Text("Retry")
-                        }
                     }
                 }
             }
