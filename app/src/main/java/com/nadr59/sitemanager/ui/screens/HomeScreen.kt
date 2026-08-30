@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,7 +65,7 @@ import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
 import com.nadr59.sitemanager.viewmodel.SortOption
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     viewModel: SiteViewModel,
@@ -193,7 +195,7 @@ fun HomeScreen(
 
             // ═══ شريط التصنيفات ═══
             if (uiState.categories.isNotEmpty()) {
-                Row(
+                FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
@@ -270,6 +272,7 @@ fun HomeScreen(
                             site = site,
                             onNavigateToDetail = onNavigateToDetail,
                             onNavigateToEdit = onNavigateToEdit,
+                            onNavigateToAnalysis = onNavigateToAnalysis,
                             onToggleFavorite = {
                                 viewModel.toggleFavorite(site.id, site.isFavorite)
                             },
@@ -296,6 +299,7 @@ private fun SiteCard(
     site: SiteEntity,
     onNavigateToDetail: (Int) -> Unit,
     onNavigateToEdit: (Int) -> Unit,
+    onNavigateToAnalysis: (Int, String, String) -> Unit,
     onToggleFavorite: () -> Unit,
     onTogglePinned: () -> Unit,
     onDelete: () -> Unit
@@ -312,7 +316,8 @@ private fun SiteCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // ═══ اسم الموقع + أيقونات ═══
+
+            // ═══ اسم الموقع + أيقونة المفضلة ═══
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -398,26 +403,28 @@ private fun SiteCard(
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // فتح داخلي
-                IconButton(
-                    onClick = { onNavigateToDetail(site.id) }
+                // الصف الأول: فتح داخلي + خارجي
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Default.Language,
-                        contentDescription = "Internal Browser",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .height(22.dp)
-                            .width(22.dp)
-                    )
-                }
+                    // فتح داخلي
+                    IconButton(onClick = { onNavigateToDetail(site.id) }) {
+                        Icon(
+                            Icons.Default.Language,
+                            contentDescription = "Internal Browser",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .height(22.dp)
+                                .width(22.dp)
+                        )
+                    }
 
-                // فتح خارجي
-                IconButton(
-                    onClick = {
+                    // فتح خارجي
+                    IconButton(onClick = {
                         try {
                             val intent = Intent(
                                 Intent.ACTION_VIEW,
@@ -425,61 +432,61 @@ private fun SiteCard(
                             )
                             context.startActivity(intent)
                         } catch (_: Exception) {}
+                    }) {
+                        Icon(
+                            Icons.Default.OpenInNew,
+                            contentDescription = "External Browser",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .height(22.dp)
+                                .width(22.dp)
+                        )
                     }
-                ) {
-                    Icon(
-                        Icons.Default.OpenInNew,
-                        contentDescription = "External Browser",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .height(22.dp)
-                            .width(22.dp)
-                    )
                 }
 
-                // تعديل
-                IconButton(
-                    onClick = { onNavigateToEdit(site.id) }
+                // الصف الثاني: تعديل + تثبيت + حذف
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .height(20.dp)
-                            .width(20.dp)
-                    )
-                }
+                    // تعديل
+                    IconButton(onClick = { onNavigateToEdit(site.id) }) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .height(20.dp)
+                                .width(20.dp)
+                        )
+                    }
 
-                // تثبيت
-                IconButton(
-                    onClick = onTogglePinned
-                ) {
-                    Icon(
-                        Icons.Default.PushPin,
-                        contentDescription = "Pin",
-                        tint = if (site.isPinned)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .height(20.dp)
-                            .width(20.dp)
-                    )
-                }
+                    // تثبيت
+                    IconButton(onClick = onTogglePinned) {
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = "Pin",
+                            tint = if (site.isPinned)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .height(20.dp)
+                                .width(20.dp)
+                        )
+                    }
 
-                // حذف
-                IconButton(
-                    onClick = onDelete
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .height(20.dp)
-                            .width(20.dp)
-                    )
+                    // حذف
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier
+                                .height(20.dp)
+                                .width(20.dp)
+                        )
+                    }
                 }
             }
         }
