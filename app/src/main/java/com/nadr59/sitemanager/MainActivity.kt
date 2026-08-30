@@ -57,6 +57,7 @@ fun MainNavHost(initialSharedUrl: String = "") {
 
         composable("home") {
             HomeScreen(
+                viewModel = vm,
                 sharedUrl = sharedUrl,
                 onSharedUrlConsumed = { sharedUrl = "" },
                 onNavigateToAdd = {
@@ -74,8 +75,8 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToEdit = { siteId: Int ->
                     navController.navigate("edit_site/$siteId")
                 },
-                onNavigateToDetail = {
-                    navController.navigate("site_detail")
+                onNavigateToDetail = { siteId: Int ->
+                    navController.navigate("site_detail/$siteId")
                 },
                 onNavigateToDashboard = {
                     navController.navigate("dashboard")
@@ -86,8 +87,22 @@ fun MainNavHost(initialSharedUrl: String = "") {
             )
         }
 
-        composable("add_site") {
+        composable(
+            route = "add_site?url={url}",
+            arguments = listOf(
+                navArgument("url") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val prefilledUrl = backStackEntry.arguments?.getString("url")
+            val addSiteVm: SiteViewModel = hiltViewModel()
+            
             AddSiteScreen(
+                viewModel = addSiteVm,
+                initialUrl = prefilledUrl,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -105,8 +120,8 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 siteId = siteId,
                 viewModel = detailVm,
                 onBack = { navController.popBackStack() },
-                onOpenBrowser = { id: Int, name: String, url: String ->
-                    navController.navigate("browser/$id")
+                onOpenBrowser = {
+                    navController.navigate("browser/$siteId")
                 }
             )
         }
