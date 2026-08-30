@@ -4,7 +4,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -20,13 +19,18 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
         try {
             if (text.isBlank()) return@withContext Result.success("")
 
-            val result = translateViaGoogle(text, sourceLanguage, targetLanguage)
-            if (result.isSuccess) return@withContext result
+            // ═══ المحاولة الأولى: Google Translate ═══
+            val googleResult = translateViaGoogle(text, "auto", targetLanguage)
+            if (googleResult.isSuccess && googleResult.getOrNull()?.isNotBlank() == true) {
+                return@withContext googleResult
+            }
 
-            val fallback = translateViaMyMemory(text, sourceLanguage, targetLanguage)
+            // ═══ المحاولة الثانية: MyMemory مع اكتشاف اللغة ═══
+            val detectedLang = detectLanguage(text)
+            val fallback = translateViaMyMemory(text, detectedLang, targetLanguage)
             if (fallback.isSuccess) return@withContext fallback
 
-            Result.failure(Exception("فشل الترجمة"))
+            Result.failure(Exception("فشل الترجمة من جميع المصادر"))
         } catch (e: Exception) {
             Result.failure(Exception("خطأ في الترجمة: ${e.message}"))
         }
@@ -47,7 +51,7 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
                 val result = translate(text, sourceLanguage, targetLanguage)
                 result.fold(
                     onSuccess = { results.add(it) },
-                    onFailure = { results.add(text) }
+                    onFailure = { results.add(text) } // إبقاء النص الأصلي عند الفشل
                 )
             }
             Result.success(results)
@@ -56,6 +60,28 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
         }
     }
 
+    // ═══ اكتشاف اللغة تلقائياً ═══
+    private fun detectLanguage(text: String): String {
+        val sample = text.take(100)
+        return when {
+            // عربي
+            sample.any { it in '\u0600'..'\u06FF' } -> "ar"
+            // صيني
+            sample.any { it in '\u4E00'..'\u9FFF' } -> "zh"
+            // ياباني
+            sample.any { it in '\u3040'..'\u309F' || it in '\u30A0'..'\u30FF' } -> "ja"
+            // كوري
+            sample.any { it in '\uAC00'..'\uD7AF' } -> "ko"
+            // روسي / سيريلك
+            sample.any { it in '\u0400'..'\u04FF' } -> "ru"
+            // فارسي
+            sample.any { it in '\u0750'..'\u077F' } -> "fa"
+            // افتراضي
+            else -> "en"
+        }
+    }
+
+    // ═══ Google Translate (يدعم auto) ═══
     private fun translateViaGoogle(
         text: String,
         source: String,
@@ -63,11 +89,11 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
     ): Result<String> {
         return try {
             val encoded = URLEncoder.encode(text, "UTF-8")
-            val urlStr = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$source&tl=$target&dt=t&q=$encoded"
-            val url = URL(urlStr)
+            val urlStr = "https://translate.googleapis.com/translate_a/single" +
+                "?client=gtx&sl=$source&tl=$target&dt=t&q=$encoded"
 
-            val conn = url.openConnection() as HttpURLConnection
-            conn.apply {
+            val url = URL(urlStr)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", "Mozilla/5.0")
                 connectTimeout = 15000
@@ -87,33 +113,35 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
             val result = StringBuilder()
 
             for (i in 0 until translations.length()) {
-                val sentence = translations.getJSONArray(i)
-                result.append(sentence.getString(0))
+                val sentence = translations.optJSONArray(i) ?: continue
+                val translated = sentence.optString(0)
+                if (translated.isNotBlank()) result.append(translated)
             }
 
-            if (result.isNotBlank()) {
-                Result.success(result.toString())
-            } else {
-                Result.failure(Exception("ترجمة فارغة"))
-            }
+            if (result.isNotBlank()) Result.success(result.toString())
+            else Result.failure(Exception("ترجمة فارغة"))
+
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+    // ═══ MyMemory (لا يدعم auto - نكتشف اللغة أولاً) ═══
     private fun translateViaMyMemory(
         text: String,
-        source: String,
+        source: String, // يجب أن يكون كود لغة حقيقي
         target: String
     ): Result<String> {
         return try {
-            val encoded = URLEncoder.encode(text.take(500), "UTF-8")
-            val langPair = "${source}|${target}"
-            val urlStr = "https://api.mymemory.translated.net/get?q=$encoded&langpair=$langPair"
-            val url = URL(urlStr)
+            // MyMemory لا يقبل "auto" - نستخدم اللغة المكتشفة
+            val validSource = if (source == "auto") detectLanguage(text) else source
 
-            val conn = url.openConnection() as HttpURLConnection
-            conn.apply {
+            val encoded = URLEncoder.encode(text.take(500), "UTF-8")
+            val langPair = "$validSource|$target"
+            val urlStr = "https://api.mymemory.translated.net/get?q=$encoded&langpair=$langPair"
+
+            val url = URL(urlStr)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 15000
                 readTimeout = 15000
@@ -128,14 +156,19 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
             conn.disconnect()
 
             val json = JSONObject(response)
+            val responseStatus = json.optInt("responseStatus", 0)
+
+            if (responseStatus != 200) {
+                val details = json.optString("responseDetails", "Unknown error")
+                return Result.failure(Exception("MyMemory: $details"))
+            }
+
             val translated = json.getJSONObject("responseData")
                 .getString("translatedText")
 
-            if (translated.isNotBlank()) {
-                Result.success(translated)
-            } else {
-                Result.failure(Exception("ترجمة فارغة"))
-            }
+            if (translated.isNotBlank()) Result.success(translated)
+            else Result.failure(Exception("ترجمة فارغة"))
+
         } catch (e: Exception) {
             Result.failure(e)
         }
