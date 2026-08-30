@@ -6,7 +6,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nadr59.sitemanager.data.local.SiteEntity
 import com.nadr59.sitemanager.viewmodel.SiteViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,6 +30,7 @@ fun AnalysisScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val site: SiteEntity? = uiState.allSites.find { it.id == siteId }
+    val scope = rememberCoroutineScope()
 
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisResult by remember { mutableStateOf<String?>(null) }
@@ -88,12 +94,31 @@ fun AnalysisScreen(
                 }
             }
 
-            // ═══ زر التحليل ═══
+            // ═══ زر التحليل بالذكاء الاصطناعي ═══
             Button(
                 onClick = {
                     isAnalyzing = true
                     errorMessage = null
                     analysisResult = null
+
+                    scope.launch {
+                        try {
+                            val result = viewModel.analyzerRepository.analyzeSite(site.url)
+                            result.fold(
+                                onSuccess = { analysis ->
+                                    analysisResult = analysis
+                                    isAnalyzing = false
+                                },
+                                onFailure = { e ->
+                                    errorMessage = e.message ?: "Analysis failed"
+                                    isAnalyzing = false
+                                }
+                            )
+                        } catch (e: Exception) {
+                            errorMessage = e.message ?: "Unknown error"
+                            isAnalyzing = false
+                        }
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -110,7 +135,7 @@ fun AnalysisScreen(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Analyzing...")
+                    Text("Analyzing with AI...")
                 } else {
                     Icon(Icons.Default.AutoAwesome, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -128,16 +153,26 @@ fun AnalysisScreen(
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "Analysis Result",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "AI Analysis",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
                             text = analysisResult ?: "",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight
                         )
                     }
                 }
@@ -164,6 +199,14 @@ fun AnalysisScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                errorMessage = null
+                            }
+                        ) {
+                            Text("Retry")
+                        }
                     }
                 }
             }
@@ -186,6 +229,20 @@ fun AnalysisScreen(
                     InfoRow("Pinned", if (site.isPinned) "Yes" else "No")
                     if (site.tags.isNotBlank()) {
                         InfoRow("Tags", site.tags)
+                    }
+                    if (site.cachedOverview.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Cached Overview",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = site.cachedOverview,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
