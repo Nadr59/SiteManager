@@ -66,17 +66,17 @@ fun MainNavHost(initialSharedUrl: String = "") {
                 onNavigateToAddWithUrl = { url: String ->
                     navController.navigate("add_site?url=${Uri.encode(url)}")
                 },
-                onNavigateToDetail = { siteId: Int ->
-                    navController.navigate("site_detail/$siteId")
-                },
                 onNavigateToSettings = {
                     navController.navigate("settings")
                 },
                 onNavigateToExport = {
                     navController.navigate("export")
                 },
-                onNavigateToEdit = { siteId: Int, name: String, url: String ->
+                onNavigateToEdit = { siteId: Int ->
                     navController.navigate("edit_site/$siteId")
+                },
+                onNavigateToDetail = { siteId: Int, name: String, url: String ->
+                    navController.navigate("site_detail/$siteId")
                 },
                 onNavigateToDashboard = {
                     navController.navigate("dashboard")
