@@ -35,16 +35,66 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        var sharedUrl = ""
-        if (intent?.action == Intent.ACTION_SEND) {
-            sharedUrl = intent.getStringExtra(Intent.EXTRA_TEXT) ?: ""
-        }
+        val sharedUrl = extractSharedUrl(intent)
 
         setContent {
             SiteManagerTheme {
                 MainNavHost(initialSharedUrl = sharedUrl)
             }
         }
+    }
+
+    // ═══ معالجة Intent الجديد (عند مشاركة للتطبيق وهو مفتوح) ═══
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val sharedUrl = extractSharedUrl(intent)
+        if (sharedUrl.isNotBlank()) {
+            setContent {
+                SiteManagerTheme {
+                    MainNavHost(initialSharedUrl = sharedUrl)
+                }
+            }
+        }
+    }
+
+    private fun extractSharedUrl(intent: Intent?): String {
+        if (intent == null) return ""
+
+        return when (intent.action) {
+            Intent.ACTION_SEND -> {
+                if (intent.type == "text/plain") {
+                    val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: ""
+                    // استخراج URL من النص
+                    extractUrlFromText(text)
+                } else ""
+            }
+            Intent.ACTION_VIEW -> {
+                intent.dataString ?: ""
+            }
+            else -> ""
+        }
+    }
+
+    private fun extractUrlFromText(text: String): String {
+        if (text.isBlank()) return ""
+
+        // إذا كان النص URL مباشراً
+        if (text.startsWith("http://") || text.startsWith("https://")) {
+            return text.trim()
+        }
+
+        // البحث عن URL داخل النص
+        val urlRegex = Regex("""https?://[^\s]+""")
+        val match = urlRegex.find(text)
+        if (match != null) return match.value.trim()
+
+        // إذا كان النص يبدو كـ domain
+        if (text.contains(".") && !text.contains(" ")) {
+            return "https://${text.trim()}"
+        }
+
+        return text.trim()
     }
 }
 
