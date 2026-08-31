@@ -13,6 +13,13 @@ dependencyResolutionManagement {
         maven("https://maven.google.com")
     }
 }
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") } // ← أضف هذا
+    }
+}
 
 rootProject.name = "SiteManager"
 include(":app")
