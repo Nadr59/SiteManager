@@ -1,14 +1,20 @@
 package com.nadr59.sitemanager.viewmodel
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.webkit.WebView
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nadr59.sitemanager.data.local.BrowserBookmark
 import com.nadr59.sitemanager.data.local.BrowserHistory
+import com.nadr59.sitemanager.data.local.PageNote
 import com.nadr59.sitemanager.data.local.SiteDatabase
 import com.nadr59.sitemanager.data.model.BrowserState
 import com.nadr59.sitemanager.data.model.PageTextNode
 import com.nadr59.sitemanager.data.model.TranslatedNode
+import com.nadr59.sitemanager.data.remote.ApiClient
+import com.nadr59.sitemanager.data.remote.WebScraper
 import com.nadr59.sitemanager.data.repository.SiteRepository
 import com.nadr59.sitemanager.data.repository.TranslationRepository
 import com.nadr59.sitemanager.domain.translator.WebPageTranslator
@@ -19,6 +25,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 
 @HiltViewModel
@@ -32,18 +40,48 @@ class BrowserViewModel @Inject constructor(
     private val browserDao = database.browserDao()
     private val siteRepository = SiteRepository(dao)
     private val pageTranslator = WebPageTranslator()
+    private val apiClient = ApiClient()
+    private val webScraper = WebScraper()
 
+    // ═══ الحالة الرئيسية ═══
     private val _uiState = MutableStateFlow(BrowserState())
     val uiState: StateFlow<BrowserState> = _uiState.asStateFlow()
 
+    // ═══ العقد المستخرجة ═══
     private val _extractedNodes = MutableStateFlow<List<PageTextNode>>(emptyList())
     val extractedNodes: StateFlow<List<PageTextNode>> = _extractedNodes.asStateFlow()
 
     private val _translatedNodes = MutableStateFlow<List<TranslatedNode>>(emptyList())
     val translatedNodes: StateFlow<List<TranslatedNode>> = _translatedNodes.asStateFlow()
 
+    // ═══ JavaScript ═══
     private val _pendingJs = MutableStateFlow<String?>(null)
     val pendingJs: StateFlow<String?> = _pendingJs.asStateFlow()
+
+    // ═══ الملاحظات ═══
+    private val _pageNotes = MutableStateFlow<List<PageNote>>(emptyList())
+    val pageNotes: StateFlow<List<PageNote>> = _pageNotes.asStateFlow()
+
+    private val _hasNotes = MutableStateFlow(false)
+    val hasNotes: StateFlow<Boolean> = _hasNotes.asStateFlow()
+
+    // ═══ ملخص الصفحة ═══
+    private val _pageSummary = MutableStateFlow<String?>(null)
+    val pageSummary: StateFlow<String?> = _pageSummary.asStateFlow()
+
+    private val _isSummarizing = MutableStateFlow(false)
+    val isSummarizing: StateFlow<Boolean> = _isSummarizing.asStateFlow()
+
+    // ═══ مساعد AI ═══
+    private val _aiMessages = MutableStateFlow<List<AiMessage>>(emptyList())
+    val aiMessages: StateFlow<List<AiMessage>> = _aiMessages.asStateFlow()
+
+    private val _isAiThinking = MutableStateFlow(false)
+    val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
+
+    // ═══ لقطة الشاشة ═══
+    private val _screenshotPath = MutableStateFlow<String?>(null)
+    val screenshotPath: StateFlow<String?> = _screenshotPath.asStateFlow()
 
     // ═══ التاريخ والإشارات ═══
     val browserHistory = browserDao.getAllHistory()
@@ -56,9 +94,11 @@ class BrowserViewModel @Inject constructor(
     val isReaderMode: StateFlow<Boolean> = _isReaderMode.asStateFlow()
 
     private var currentSiteId = 0
+    private var currentPageContent = ""
 
     fun onJsExecuted() { _pendingJs.value = null }
 
+    // ═══ تحميل الموقع ═══
     fun loadSite(siteId: Int) {
         currentSiteId = siteId
         viewModelScope.launch {
@@ -75,13 +115,12 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    fun loadUrl(url: String) {
-        _uiState.update { it.copy(url = url) }
-    }
+    fun loadUrl(url: String) { _uiState.update { it.copy(url = url) } }
 
     fun updateTitle(title: String) {
         _uiState.update { it.copy(title = title) }
         checkBookmarkStatus()
+        loadNotesForCurrentUrl()
     }
 
     fun updateProgress(progress: Int) {
@@ -100,15 +139,201 @@ class BrowserViewModel @Inject constructor(
         _uiState.update { it.copy(targetLanguage = language) }
     }
 
-    fun showTranslationSheet() {
-        _uiState.update { it.copy(showTranslationSheet = true) }
+    fun showTranslationSheet() { _uiState.update { it.copy(showTranslationSheet = true) } }
+    fun hideTranslationSheet() { _uiState.update { it.copy(showTranslationSheet = false) } }
+
+    // ═══════════════════════════════════════
+    // لقطة الشاشة
+    // ═══════════════════════════════════════
+    fun takeScreenshot(webView: WebView) {
+        viewModelScope.launch {
+            try {
+                val bitmap = Bitmap.createBitmap(
+                    webView.width,
+                    webView.height,
+                    Bitmap.Config.ARGB_8888
+                )
+                val canvas = Canvas(bitmap)
+                webView.draw(canvas)
+
+                val fileName = "screenshot_${System.currentTimeMillis()}.png"
+                val file = File(
+                    getApplication<Application>().getExternalFilesDir(null),
+                    fileName
+                )
+                FileOutputStream(file).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+                }
+
+                _screenshotPath.value = file.absolutePath
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "فشل التقاط الشاشة: ${e.message}") }
+            }
+        }
     }
 
-    fun hideTranslationSheet() {
-        _uiState.update { it.copy(showTranslationSheet = false) }
+    fun clearScreenshot() { _screenshotPath.value = null }
+
+    // ═══════════════════════════════════════
+    // ملخص الصفحة بالذكاء الاصطناعي
+    // ═══════════════════════════════════════
+    fun summarizePage() {
+        val url = _uiState.value.url
+        if (url.isBlank()) return
+
+        _isSummarizing.value = true
+        _pageSummary.value = null
+
+        viewModelScope.launch {
+            try {
+                // جلب محتوى الصفحة
+                val content = webScraper.scrape(url)
+                currentPageContent = content.rawContent
+
+                val prompt = """أنت مساعد ذكي مختصر.
+
+لخّص هذه الصفحة في نقاط واضحة:
+الرابط: ${content.url}
+العنوان: ${content.title ?: ""}
+الوصف: ${content.description ?: ""}
+
+المحتوى:
+${content.rawContent.take(3000)}
+
+قواعد:
+- لخّص في 5 نقاط رئيسية كحد أقصى
+- كن مختصراً ومفيداً
+- أجب بالعربية
+- استخدم نقاط (•) للتنظيم"""
+
+                val response = apiClient.ask(prompt)
+
+                if (response.success) {
+                    _pageSummary.value = response.response
+                } else {
+                    _uiState.update { it.copy(error = response.error) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "فشل التلخيص: ${e.message}") }
+            } finally {
+                _isSummarizing.value = false
+            }
+        }
     }
 
-    // ═══ حفظ في التاريخ ═══
+    fun clearSummary() { _pageSummary.value = null }
+
+    // ═══════════════════════════════════════
+    // مساعد AI للصفحة
+    // ═══════════════════════════════════════
+    fun askAiAboutPage(question: String) {
+        if (question.isBlank()) return
+
+        val url = _uiState.value.url
+        val title = _uiState.value.title
+
+        // إضافة رسالة المستخدم
+        _aiMessages.update { it + AiMessage(text = question, isUser = true) }
+        _isAiThinking.value = true
+
+        viewModelScope.launch {
+            try {
+                // جلب المحتوى إذا لم يكن محملاً
+                if (currentPageContent.isBlank()) {
+                    try {
+                        val content = webScraper.scrape(url)
+                        currentPageContent = content.rawContent
+                    } catch (_: Exception) {}
+                }
+
+                val prompt = """أنت مساعد ذكي يساعد المستخدم في فهم محتوى صفحة ويب.
+
+الصفحة الحالية:
+- الرابط: $url
+- العنوان: $title
+${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.take(3000)}" else ""}
+
+سؤال المستخدم: $question
+
+أجب بشكل مختصر ومفيد بالعربية."""
+
+                val response = apiClient.ask(prompt)
+
+                if (response.success) {
+                    _aiMessages.update {
+                        it + AiMessage(text = response.response, isUser = false)
+                    }
+                } else {
+                    _aiMessages.update {
+                        it + AiMessage(
+                            text = "عذراً، حدث خطأ: ${response.error}",
+                            isUser = false,
+                            isError = true
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                _aiMessages.update {
+                    it + AiMessage(
+                        text = "خطأ: ${e.message}",
+                        isUser = false,
+                        isError = true
+                    )
+                }
+            } finally {
+                _isAiThinking.value = false
+            }
+        }
+    }
+
+    fun clearAiMessages() { _aiMessages.value = emptyList() }
+
+    // ═══════════════════════════════════════
+    // ملاحظات الصفحة
+    // ═══════════════════════════════════════
+    private fun loadNotesForCurrentUrl() {
+        val url = _uiState.value.url
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            browserDao.getNotesForUrl(url).collect { notes ->
+                _pageNotes.value = notes
+                _hasNotes.value = notes.isNotEmpty()
+            }
+        }
+    }
+
+    fun addNote(noteText: String) {
+        if (noteText.isBlank()) return
+        val state = _uiState.value
+        viewModelScope.launch {
+            browserDao.insertNote(
+                PageNote(
+                    url = state.url,
+                    title = state.title.ifBlank { state.url },
+                    note = noteText
+                )
+            )
+        }
+    }
+
+    fun updateNote(note: PageNote, newText: String) {
+        viewModelScope.launch {
+            browserDao.updateNote(
+                note.copy(
+                    note = newText,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    fun deleteNote(noteId: Int) {
+        viewModelScope.launch { browserDao.deleteNote(noteId) }
+    }
+
+    // ═══════════════════════════════════════
+    // التاريخ والإشارات
+    // ═══════════════════════════════════════
     fun saveToHistory() {
         val state = _uiState.value
         if (state.url.isBlank()) return
@@ -123,7 +348,6 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    // ═══ إضافة/إزالة إشارة مرجعية ═══
     fun toggleBookmark() {
         val state = _uiState.value
         if (state.url.isBlank()) return
@@ -154,58 +378,181 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    // ═══ وضع القراءة ═══
+    // ═══════════════════════════════════════
+    // وضع القراءة
+    // ═══════════════════════════════════════
     fun toggleReaderMode() {
         val newMode = !_isReaderMode.value
         _isReaderMode.value = newMode
-        if (newMode) {
-            _pendingJs.value = buildReaderModeScript()
-        } else {
-            _pendingJs.value = "window.location.reload();"
-        }
+        _pendingJs.value = if (newMode) buildEnhancedReaderModeScript()
+        else "window.location.reload();"
     }
 
-    private fun buildReaderModeScript(): String {
+    private fun buildEnhancedReaderModeScript(): String {
         return """
         (function() {
-            // إزالة الإعلانات والعناصر الزائدة
-            var selectors = [
-                'header', 'footer', 'nav', 'aside',
+            // ═══ إزالة العناصر الزائدة ═══
+            var removeSelectors = [
+                'header:not(article header)',
+                'footer',
+                'nav',
+                'aside',
                 '.ad', '.ads', '.advertisement', '.banner',
-                '.sidebar', '.cookie', '.popup', '.modal',
+                '.sidebar', '.widget', '.popup', '.modal',
+                '.cookie-notice', '.newsletter-signup',
                 '[class*="ad-"]', '[id*="ad-"]',
                 '[class*="social"]', '[class*="share"]',
-                'script', 'style', 'iframe', 'video'
+                '[class*="related"]', '[class*="recommended"]',
+                'script', 'style', 'iframe',
+                '.comments', '#comments',
+                '.sticky', '[class*="sticky"]'
             ];
-            selectors.forEach(function(s) {
-                document.querySelectorAll(s).forEach(function(el) {
-                    el.remove();
-                });
+            
+            removeSelectors.forEach(function(s) {
+                try {
+                    document.querySelectorAll(s).forEach(function(el) {
+                        el.remove();
+                    });
+                } catch(e) {}
             });
 
-            // تجميل المحتوى
-            document.body.style.cssText = `
-                max-width: 800px !important;
-                margin: 0 auto !important;
-                padding: 20px !important;
-                font-family: 'Georgia', serif !important;
-                font-size: 18px !important;
-                line-height: 1.8 !important;
-                color: #333 !important;
-                background: #fafafa !important;
+            // ═══ استخراج المحتوى الرئيسي ═══
+            var mainContent = 
+                document.querySelector('article') ||
+                document.querySelector('main') ||
+                document.querySelector('[role="main"]') ||
+                document.querySelector('.content') ||
+                document.querySelector('.post-content') ||
+                document.querySelector('.entry-content') ||
+                document.body;
+
+            // ═══ إنشاء حاوية القراءة ═══
+            var readerContainer = document.createElement('div');
+            readerContainer.id = 'reader-mode-container';
+            readerContainer.innerHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
+
+            // ═══ تطبيق الستايل ═══
+            document.body.innerHTML = '';
+            document.body.appendChild(readerContainer);
+
+            var style = document.createElement('style');
+            style.textContent = `
+                * { box-sizing: border-box; }
+                
+                body {
+                    background: #FAFAFA !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+                
+                #reader-mode-container {
+                    max-width: 720px !important;
+                    margin: 0 auto !important;
+                    padding: 24px 20px 48px !important;
+                    font-family: 'Georgia', 'Times New Roman', serif !important;
+                    font-size: 19px !important;
+                    line-height: 1.9 !important;
+                    color: #2C2C2C !important;
+                    background: #FAFAFA !important;
+                }
+                
+                #reader-mode-container h1,
+                #reader-mode-container h2,
+                #reader-mode-container h3,
+                #reader-mode-container h4 {
+                    font-family: sans-serif !important;
+                    color: #1A1A1A !important;
+                    margin-top: 1.5em !important;
+                    line-height: 1.4 !important;
+                }
+                
+                #reader-mode-container h1 { font-size: 28px !important; }
+                #reader-mode-container h2 { font-size: 23px !important; }
+                #reader-mode-container h3 { font-size: 19px !important; }
+                
+                #reader-mode-container p {
+                    margin-bottom: 1.2em !important;
+                    text-align: justify !important;
+                }
+                
+                #reader-mode-container img {
+                    max-width: 100% !important;
+                    height: auto !important;
+                    border-radius: 8px !important;
+                    margin: 16px 0 !important;
+                    display: block !important;
+                }
+                
+                #reader-mode-container a {
+                    color: #1565C0 !important;
+                    text-decoration: underline !important;
+                }
+                
+                #reader-mode-container blockquote {
+                    border-right: 4px solid #1565C0 !important;
+                    border-left: none !important;
+                    padding: 8px 16px !important;
+                    margin: 16px 0 !important;
+                    background: #F0F4FF !important;
+                    border-radius: 0 8px 8px 0 !important;
+                    font-style: italic !important;
+                }
+                
+                #reader-mode-container pre,
+                #reader-mode-container code {
+                    background: #F5F5F5 !important;
+                    border-radius: 4px !important;
+                    padding: 2px 6px !important;
+                    font-family: monospace !important;
+                    font-size: 16px !important;
+                }
+                
+                #reader-mode-container pre {
+                    padding: 16px !important;
+                    overflow-x: auto !important;
+                    margin: 16px 0 !important;
+                }
+                
+                #reader-mode-container ul,
+                #reader-mode-container ol {
+                    padding-right: 24px !important;
+                    padding-left: 0 !important;
+                }
+                
+                #reader-mode-container li {
+                    margin-bottom: 8px !important;
+                }
+                
+                #reader-mode-container table {
+                    width: 100% !important;
+                    border-collapse: collapse !important;
+                    margin: 16px 0 !important;
+                }
+                
+                #reader-mode-container td,
+                #reader-mode-container th {
+                    border: 1px solid #DDD !important;
+                    padding: 8px 12px !important;
+                }
+                
+                #reader-mode-container th {
+                    background: #F0F0F0 !important;
+                    font-weight: bold !important;
+                }
             `;
+            document.head.appendChild(style);
 
-            // تحسين الصور
-            document.querySelectorAll('img').forEach(function(img) {
-                img.style.maxWidth = '100%';
-                img.style.height = 'auto';
-            });
-
+            // ═══ ضبط الاتجاه ═══
+            document.documentElement.setAttribute('dir', 'auto');
+            
             return 'reader_mode_enabled';
         })();
         """.trimIndent()
     }
 
+    // ═══════════════════════════════════════
+    // الترجمة
+    // ═══════════════════════════════════════
     fun startPageTranslation() {
         _uiState.update {
             it.copy(
@@ -231,9 +578,7 @@ class BrowserViewModel @Inject constructor(
             val result = translationRepository.translatePageNodes(
                 nodes = nodes,
                 targetLanguage = _uiState.value.targetLanguage,
-                onProgress = { p ->
-                    _uiState.update { it.copy(translationProgress = p) }
-                }
+                onProgress = { p -> _uiState.update { it.copy(translationProgress = p) } }
             )
             result.fold(
                 onSuccess = { translated: List<TranslatedNode> ->
@@ -256,9 +601,7 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    fun translateSelectedText() {
-        _pendingJs.value = pageTranslator.buildSelectionScript()
-    }
+    fun translateSelectedText() { _pendingJs.value = pageTranslator.buildSelectionScript() }
 
     fun onTextSelected(jsonString: String) {
         try {
@@ -305,3 +648,11 @@ class BrowserViewModel @Inject constructor(
         viewModelScope.launch { browserDao.deleteBookmark(id) }
     }
 }
+
+// ═══ نموذج رسائل AI ═══
+data class AiMessage(
+    val text: String,
+    val isUser: Boolean,
+    val isError: Boolean = false,
+    val timestamp: Long = System.currentTimeMillis()
+)
