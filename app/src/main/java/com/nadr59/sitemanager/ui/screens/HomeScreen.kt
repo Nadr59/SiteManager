@@ -753,60 +753,70 @@ fun SiteGridCard(
             Spacer(Modifier.height(8.dp))
 
             // ═══ أزرار سريعة ═══
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    onClick = { onNavigateToDetail(site.id) },
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        Icons.Default.Language,
-                        null,
-                        Modifier
-                            .padding(8.dp)
-                            .size(16.dp)
-                            .align(Alignment.CenterHorizontally),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                Surface(
-                    onClick = { onNavigateToAnalysis(site.id, site.name, site.url) },
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        Icons.Default.Analytics,
-                        null,
-                        Modifier
-                            .padding(8.dp)
-                            .size(16.dp)
-                            .align(Alignment.CenterHorizontally),
-                        tint = MaterialTheme.colorScheme.tertiary
-                    )
-                }
-                Surface(
-                    onClick = onDelete,
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        Icons.Default.Delete,
-                        null,
-                        Modifier
-                            .padding(8.dp)
-                            .size(16.dp)
-                            .align(Alignment.CenterHorizontally),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
+            // ═══ أزرار سريعة في SiteGridCard - استبدل الكود القديم بهذا ═══
+Row(
+    horizontalArrangement = Arrangement.spacedBy(8.dp),
+    modifier = Modifier.fillMaxWidth(),
+    verticalAlignment = Alignment.CenterVertically
+) {
+    Surface(
+        onClick = { onNavigateToDetail(site.id) },
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.weight(1f)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                Icons.Default.Language,
+                null,
+                Modifier
+                    .padding(8.dp)
+                    .size(16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+    Surface(
+        onClick = { onNavigateToAnalysis(site.id, site.name, site.url) },
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        modifier = Modifier.weight(1f)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                Icons.Default.Analytics,
+                null,
+                Modifier
+                    .padding(8.dp)
+                    .size(16.dp),
+                tint = MaterialTheme.colorScheme.tertiary
+            )
+        }
+    }
+    Surface(
+        onClick = onDelete,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = Modifier.weight(1f)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                Icons.Default.Delete,
+                null,
+                Modifier
+                    .padding(8.dp)
+                    .size(16.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
         }
     }
 }
