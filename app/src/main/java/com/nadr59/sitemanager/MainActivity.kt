@@ -1,3 +1,16 @@
+package com.nadr59.sitemanager
+
+import android.content.Intent
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.nadr59.sitemanager.ui.theme.SiteManagerTheme
+import com.nadr59.sitemanager.viewmodel.ThemeViewModel
+import dagger.hilt.android.AndroidEntryPoint
+
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -5,7 +18,6 @@ class MainActivity : ComponentActivity() {
         val sharedUrl = extractSharedUrl(intent)
 
         setContent {
-            // ═══ الثيم ═══
             val themeVm: ThemeViewModel = hiltViewModel()
             val currentTheme by themeVm.currentTheme.collectAsState()
             val isDarkMode by themeVm.isDarkMode.collectAsState()
