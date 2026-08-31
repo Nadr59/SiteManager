@@ -9,14 +9,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,7 +49,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.ViewList
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
@@ -84,7 +80,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -170,7 +165,6 @@ fun HomeScreen(
                     }
                 },
                 actions = {
-                    // ═══ تبديل العرض ═══
                     IconButton(onClick = { isGridView = !isGridView }) {
                         Icon(
                             if (isGridView) Icons.Default.ViewList
@@ -179,7 +173,6 @@ fun HomeScreen(
                         )
                     }
 
-                    // ═══ الفرز ═══
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {
                             Icon(Icons.Default.Sort, "فرز")
@@ -216,7 +209,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // ═══ المفضلة ═══
                     IconButton(onClick = { viewModel.toggleFavoritesOnly() }) {
                         Icon(
                             if (uiState.showFavoritesOnly) Icons.Default.Favorite
@@ -228,7 +220,6 @@ fun HomeScreen(
                         )
                     }
 
-                    // ═══ الإعدادات ═══
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, "الإعدادات")
                     }
@@ -251,10 +242,7 @@ fun HomeScreen(
                             badge = {
                                 if (uiState.filteredSites.isNotEmpty()) {
                                     Badge {
-                                        Text(
-                                            "${uiState.filteredSites.size}",
-                                            fontSize = 9.sp
-                                        )
+                                        Text("${uiState.filteredSites.size}", fontSize = 9.sp)
                                     }
                                 }
                             }
@@ -290,11 +278,7 @@ fun HomeScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    "إضافة",
-                    modifier = Modifier.size(28.dp)
-                )
+                Icon(Icons.Default.Add, "إضافة", modifier = Modifier.size(28.dp))
             }
         }
     ) { padding ->
@@ -303,7 +287,6 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ═══ شريط البحث ═══
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.updateSearchQuery(it) },
@@ -312,17 +295,13 @@ fun HomeScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 placeholder = { Text("ابحث في مواقعك...") },
                 leadingIcon = {
-                    Icon(
-                        Icons.Default.Search,
-                        null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Icon(Icons.Default.Search, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp)
             )
 
-            // ═══ التصنيفات ═══
             AnimatedVisibility(visible = uiState.categories.isNotEmpty()) {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
@@ -338,8 +317,7 @@ fun HomeScreen(
                             color = if (selected)
                                 MaterialTheme.colorScheme.primary
                             else
-                                MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier
+                                MaterialTheme.colorScheme.surfaceVariant
                         ) {
                             Text(
                                 text = cat,
@@ -359,7 +337,6 @@ fun HomeScreen(
                 }
             }
 
-            // ═══ المحتوى ═══
             AnimatedContent(
                 targetState = uiState.isLoading,
                 modifier = Modifier.fillMaxSize()
@@ -369,7 +346,10 @@ fun HomeScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
                             Spacer(Modifier.height(16.dp))
-                            Text("جارٍ التحميل...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "جارٍ التحميل...",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 } else if (uiState.filteredSites.isEmpty()) {
@@ -381,7 +361,6 @@ fun HomeScreen(
                 } else {
                     AnimatedContent(targetState = isGridView) { grid ->
                         if (grid) {
-                            // ═══ عرض الشبكة ═══
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(2),
                                 contentPadding = PaddingValues(16.dp),
@@ -406,7 +385,6 @@ fun HomeScreen(
                                 }
                             }
                         } else {
-                            // ═══ عرض القائمة ═══
                             LazyColumn(
                                 state = listState,
                                 contentPadding = PaddingValues(
@@ -443,7 +421,7 @@ fun HomeScreen(
             }
         }
     }
-}
+} // ← نهاية HomeScreen
 
 // ═══════════════════════════════════════════════
 // بطاقة القائمة
@@ -490,7 +468,6 @@ fun SiteListCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // ═══ أيقونة الموقع ═══
                 SiteFavicon(
                     name = site.name,
                     url = site.url,
@@ -558,7 +535,6 @@ fun SiteListCard(
                 }
             }
 
-            // ═══ الوصف ═══
             if (site.description.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -571,7 +547,6 @@ fun SiteListCard(
                 )
             }
 
-            // ═══ التصنيف والوسوم ═══
             if (site.category.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -603,7 +578,6 @@ fun SiteListCard(
                 }
             }
 
-            // ═══ أزرار الإجراءات ═══
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -656,7 +630,7 @@ fun SiteListCard(
             }
         }
     }
-}
+} // ← نهاية SiteListCard
 
 // ═══════════════════════════════════════════════
 // بطاقة الشبكة
@@ -683,7 +657,6 @@ fun SiteGridCard(
             modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ═══ المفضلة ═══
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
@@ -705,7 +678,6 @@ fun SiteGridCard(
                 }
             }
 
-            // ═══ أيقونة الموقع ═══
             SiteFavicon(
                 name = site.name,
                 url = site.url,
@@ -753,73 +725,69 @@ fun SiteGridCard(
             Spacer(Modifier.height(8.dp))
 
             // ═══ أزرار سريعة ═══
-            // ═══ أزرار سريعة في SiteGridCard - استبدل الكود القديم بهذا ═══
-Row(
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    modifier = Modifier.fillMaxWidth(),
-    verticalAlignment = Alignment.CenterVertically
-) {
-    Surface(
-        onClick = { onNavigateToDetail(site.id) },
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = Modifier.weight(1f)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                Icons.Default.Language,
-                null,
-                Modifier
-                    .padding(8.dp)
-                    .size(16.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    onClick = { onNavigateToDetail(site.id) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.Language,
+                            null,
+                            Modifier.padding(8.dp).size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                Surface(
+                    onClick = { onNavigateToAnalysis(site.id, site.name, site.url) },
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.Analytics,
+                            null,
+                            Modifier.padding(8.dp).size(16.dp),
+                            tint = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                }
+                Surface(
+                    onClick = onDelete,
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            null,
+                            Modifier.padding(8.dp).size(16.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
         }
     }
-    Surface(
-        onClick = { onNavigateToAnalysis(site.id, site.name, site.url) },
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        modifier = Modifier.weight(1f)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                Icons.Default.Analytics,
-                null,
-                Modifier
-                    .padding(8.dp)
-                    .size(16.dp),
-                tint = MaterialTheme.colorScheme.tertiary
-            )
-        }
-    }
-    Surface(
-        onClick = onDelete,
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.errorContainer,
-        modifier = Modifier.weight(1f)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                Icons.Default.Delete,
-                null,
-                Modifier
-                    .padding(8.dp)
-                    .size(16.dp),
-                tint = MaterialTheme.colorScheme.error
-            )
-        }
-    }
-}
+} // ← نهاية SiteGridCard
 
 // ═══════════════════════════════════════════════
 // مكونات مساعدة
@@ -848,10 +816,7 @@ fun SiteFavicon(
                 text = letter,
                 color = Color.White,
                 fontWeight = FontWeight.Black,
-                fontSize = when {
-                    modifier == Modifier -> 20.sp
-                    else -> 22.sp
-                }
+                fontSize = 22.sp
             )
         }
     }
@@ -867,12 +832,7 @@ fun ActionIconButton(
         onClick = onClick,
         modifier = Modifier.size(32.dp)
     ) {
-        Icon(
-            icon,
-            null,
-            Modifier.size(18.dp),
-            tint = tint
-        )
+        Icon(icon, null, Modifier.size(18.dp), tint = tint)
     }
 }
 
@@ -924,11 +884,7 @@ fun EmptyState(
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Add,
-                            null,
-                            tint = MaterialTheme.colorScheme.onPrimary
-                        )
+                        Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.onPrimary)
                         Spacer(Modifier.width(8.dp))
                         Text(
                             "إضافة موقع",
@@ -940,6 +896,4 @@ fun EmptyState(
             }
         }
     }
-}  
-    }
-        
+} // ← نهاية EmptyState
