@@ -2,6 +2,8 @@ package com.nadr59.sitemanager.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,14 +26,18 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,8 +48,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import com.nadr59.sitemanager.ui.theme.AppTheme
+import com.nadr59.sitemanager.viewmodel.ThemeViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,11 +60,15 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit
 ) {
+    val themeVm: ThemeViewModel = hiltViewModel()
+    val currentTheme by themeVm.currentTheme.collectAsState()
+    val isDarkMode by themeVm.isDarkMode.collectAsState()
+
     var isLoading by remember { mutableStateOf(true) }
     var serviceStatus by remember { mutableStateOf("جارٍ التحقق...") }
     var isOnline by remember { mutableStateOf(false) }
@@ -75,12 +88,10 @@ fun SettingsScreen(
                         .connectTimeout(10, TimeUnit.SECONDS)
                         .readTimeout(10, TimeUnit.SECONDS)
                         .build()
-
                     val request = Request.Builder()
                         .url("https://ai-key-manager.vercel.app/api/ask")
                         .get()
                         .build()
-
                     val response = client.newCall(request).execute()
                     response.body?.string() ?: "{}"
                 }
@@ -109,9 +120,7 @@ fun SettingsScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        loadStatus()
-    }
+    LaunchedEffect(Unit) { loadStatus() }
 
     Scaffold(
         topBar = {
@@ -119,12 +128,12 @@ fun SettingsScreen(
                 title = { Text("الإعدادات", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "رجوع")
                     }
                 },
                 actions = {
                     IconButton(onClick = { loadStatus() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "تحديث")
+                        Icon(Icons.Default.Refresh, "تحديث")
                     }
                 }
             )
@@ -138,6 +147,14 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+
+            // ═══ قسم الثيم ═══
+            ThemeSection(
+                currentTheme = currentTheme,
+                isDarkMode = isDarkMode,
+                onThemeSelected = { themeVm.setTheme(it) },
+                onToggleDarkMode = { themeVm.toggleDarkMode() }
+            )
 
             // ═══ حالة الخدمة ═══
             Card(
@@ -157,17 +174,13 @@ fun SettingsScreen(
                 ) {
                     Icon(
                         if (isOnline) Icons.Default.Cloud else Icons.Default.Error,
-                        contentDescription = null,
+                        null,
                         tint = if (isOnline) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "خدمة الذكاء الاصطناعي",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
+                        Text("خدمة الذكاء الاصطناعي", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         if (isLoading) {
                             CircularProgressIndicator(
                                 modifier = Modifier
@@ -176,19 +189,12 @@ fun SettingsScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text(
-                                serviceStatus,
-                                fontSize = 13.sp,
-                                color = if (isOnline)
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                else
-                                    MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.7f)
-                            )
+                            Text(serviceStatus, fontSize = 13.sp)
                         }
                     }
                     Icon(
                         if (isOnline) Icons.Default.CheckCircle else Icons.Default.Error,
-                        contentDescription = null,
+                        null,
                         tint = if (isOnline) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.error
                     )
@@ -204,11 +210,7 @@ fun SettingsScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "معلومات الخدمة",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
+                    Text("معلومات الخدمة", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Spacer(Modifier.height(12.dp))
                     InfoRow("الحالة", if (isOnline) "نشطة" else "غير متصلة")
                     InfoRow("المفاتيح النشطة", "$activeKeys")
@@ -221,13 +223,8 @@ fun SettingsScreen(
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(4.dp))
                         providers.forEach { provider ->
-                            Text(
-                                "  • $provider",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Text("  • $provider", fontSize = 13.sp)
                         }
                     }
                 }
@@ -268,16 +265,8 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Security,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            "الأمان والخصوصية",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
+                        Icon(Icons.Default.Security, null, Modifier.padding(end = 8.dp))
+                        Text("الأمان والخصوصية", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -302,16 +291,8 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            "عن التطبيق",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
+                        Icon(Icons.Default.Info, null, Modifier.padding(end = 8.dp))
+                        Text("عن التطبيق", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                     Spacer(Modifier.height(12.dp))
                     InfoRow("الإصدار", "2.1.0")
@@ -324,25 +305,7 @@ fun SettingsScreen(
     }
 }
 
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
-        Text(
-            label,
-            fontWeight = FontWeight.Medium,
-            fontSize = 13.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(120.dp)
-        )
-        Text(value, fontSize = 13.sp)
-    }
-}
-// أضف هذا القسم في SettingsScreen.kt
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ThemeSection(
     currentTheme: AppTheme,
@@ -416,5 +379,23 @@ fun ThemeSection(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Text(
+            label,
+            fontWeight = FontWeight.Medium,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(120.dp)
+        )
+        Text(value, fontSize = 13.sp)
     }
 }
