@@ -89,5 +89,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 // Markdown renderer
     implementation("com.github.jeziellago:compose-markdown:0.5.4")
+// Coil للصور
+implementation("io.coil-kt:coil-compose:2.7.0")
 
 }
