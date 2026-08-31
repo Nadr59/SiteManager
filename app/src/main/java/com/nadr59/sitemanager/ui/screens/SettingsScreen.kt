@@ -341,3 +341,80 @@ private fun InfoRow(label: String, value: String) {
         Text(value, fontSize = 13.sp)
     }
 }
+// أضف هذا القسم في SettingsScreen.kt
+
+@Composable
+fun ThemeSection(
+    currentTheme: AppTheme,
+    isDarkMode: Boolean,
+    onThemeSelected: (AppTheme) -> Unit,
+    onToggleDarkMode: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🎨", fontSize = 20.sp)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "المظهر والثيم",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // ═══ الوضع الداكن ═══
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("الوضع الداكن", fontSize = 14.sp)
+                Switch(
+                    checked = isDarkMode,
+                    onCheckedChange = { onToggleDarkMode() }
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "لون الثيم",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // ═══ اختيار الثيم ═══
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AppTheme.entries.forEach { theme ->
+                    FilterChip(
+                        selected = currentTheme == theme,
+                        onClick = { onThemeSelected(theme) },
+                        label = {
+                            Text(
+                                "${theme.emoji} ${theme.displayName}",
+                                fontSize = 12.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                }
+            }
+        }
+    }
+}
