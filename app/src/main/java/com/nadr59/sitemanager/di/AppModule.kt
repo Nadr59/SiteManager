@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.nadr59.sitemanager.data.local.BrowserDao
 import com.nadr59.sitemanager.data.local.SiteDao
 import com.nadr59.sitemanager.data.local.SiteDatabase
 import dagger.Module
@@ -31,9 +32,14 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideBrowserDao(database: SiteDatabase): BrowserDao {
+        return database.browserDao()
+    }
+
+    @Provides
+    @Singleton
     fun provideGson(): Gson = GsonBuilder().create()
 
-    // ═══ هذا هو الناقص ═══
     @Provides
     @Singleton
     fun provideSharedPreferences(@ApplicationContext context: Context): SharedPreferences {
