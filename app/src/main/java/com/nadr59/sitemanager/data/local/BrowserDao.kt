@@ -1,4 +1,3 @@
-// data/local/BrowserDao.kt
 package com.nadr59.sitemanager.data.local
 
 import androidx.room.Dao
@@ -6,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -52,4 +52,23 @@ interface BrowserDao {
 
     @Query("DELETE FROM translation_cache WHERE cachedAt < :before")
     suspend fun clearOldCache(before: Long)
+
+    // ═══ ملاحظات الصفحة ═══
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNote(note: PageNote)
+
+    @Update
+    suspend fun updateNote(note: PageNote)
+
+    @Query("DELETE FROM page_notes WHERE id = :id")
+    suspend fun deleteNote(id: Int)
+
+    @Query("SELECT * FROM page_notes WHERE url = :url ORDER BY updatedAt DESC")
+    fun getNotesForUrl(url: String): Flow<List<PageNote>>
+
+    @Query("SELECT * FROM page_notes ORDER BY updatedAt DESC")
+    fun getAllNotes(): Flow<List<PageNote>>
+
+    @Query("SELECT COUNT(*) FROM page_notes WHERE url = :url")
+    suspend fun getNoteCountForUrl(url: String): Int
 }
