@@ -41,47 +41,39 @@ class BrowserViewModel @Inject constructor(
     private val apiClient = ApiClient()
     private val webScraper = WebScraper()
 
-    // ═══ الحالة الرئيسية ═══
     private val _uiState = MutableStateFlow(BrowserState())
     val uiState: StateFlow<BrowserState> = _uiState.asStateFlow()
 
-    // ═══ العقد المستخرجة ═══
     private val _extractedNodes = MutableStateFlow<List<PageTextNode>>(emptyList())
     val extractedNodes: StateFlow<List<PageTextNode>> = _extractedNodes.asStateFlow()
 
     private val _translatedNodes = MutableStateFlow<List<TranslatedNode>>(emptyList())
     val translatedNodes: StateFlow<List<TranslatedNode>> = _translatedNodes.asStateFlow()
 
-    // ═══ JavaScript ═══
     private val _pendingJs = MutableStateFlow<String?>(null)
     val pendingJs: StateFlow<String?> = _pendingJs.asStateFlow()
 
-    // ═══ الملاحظات ═══
     private val _pageNotes = MutableStateFlow<List<PageNote>>(emptyList())
     val pageNotes: StateFlow<List<PageNote>> = _pageNotes.asStateFlow()
 
     private val _hasNotes = MutableStateFlow(false)
     val hasNotes: StateFlow<Boolean> = _hasNotes.asStateFlow()
 
-    // ═══ ملخص الصفحة ═══
     private val _pageSummary = MutableStateFlow<String?>(null)
     val pageSummary: StateFlow<String?> = _pageSummary.asStateFlow()
 
     private val _isSummarizing = MutableStateFlow(false)
     val isSummarizing: StateFlow<Boolean> = _isSummarizing.asStateFlow()
 
-    // ═══ مساعد AI ═══
     private val _aiMessages = MutableStateFlow<List<AiMessage>>(emptyList())
     val aiMessages: StateFlow<List<AiMessage>> = _aiMessages.asStateFlow()
 
     private val _isAiThinking = MutableStateFlow(false)
     val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
 
-    // ═══ لقطة الشاشة ═══
     private val _screenshotPath = MutableStateFlow<String?>(null)
     val screenshotPath: StateFlow<String?> = _screenshotPath.asStateFlow()
 
-    // ═══ التاريخ والإشارات ═══
     val browserHistory = browserDao.getAllHistory()
     val bookmarks = browserDao.getAllBookmarks()
 
@@ -94,9 +86,10 @@ class BrowserViewModel @Inject constructor(
     private var currentSiteId = 0
     private var currentPageContent = ""
 
-    fun onJsExecuted() { _pendingJs.value = null }
+    fun onJsExecuted() {
+        _pendingJs.value = null
+    }
 
-    // ═══ تحميل الموقع ═══
     fun loadSite(siteId: Int) {
         currentSiteId = siteId
         viewModelScope.launch {
@@ -113,7 +106,9 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    fun loadUrl(url: String) { _uiState.update { it.copy(url = url) } }
+    fun loadUrl(url: String) {
+        _uiState.update { it.copy(url = url) }
+    }
 
     fun updateTitle(title: String) {
         _uiState.update { it.copy(title = title) }
@@ -137,32 +132,31 @@ class BrowserViewModel @Inject constructor(
         _uiState.update { it.copy(targetLanguage = language) }
     }
 
-    fun showTranslationSheet() { _uiState.update { it.copy(showTranslationSheet = true) } }
-    fun hideTranslationSheet() { _uiState.update { it.copy(showTranslationSheet = false) } }
+    fun showTranslationSheet() {
+        _uiState.update { it.copy(showTranslationSheet = true) }
+    }
 
-    // ═══════════════════════════════════════
-    // لقطة الشاشة
-    // ═══════════════════════════════════════
+    fun hideTranslationSheet() {
+        _uiState.update { it.copy(showTranslationSheet = false) }
+    }
+
+    // ═══ لقطة الشاشة ═══
     fun takeScreenshot(webView: WebView) {
         viewModelScope.launch {
             try {
                 val bitmap = Bitmap.createBitmap(
-                    webView.width,
-                    webView.height,
-                    Bitmap.Config.ARGB_8888
+                    webView.width, webView.height, Bitmap.Config.ARGB_8888
                 )
                 val canvas = Canvas(bitmap)
                 webView.draw(canvas)
 
                 val fileName = "screenshot_${System.currentTimeMillis()}.png"
                 val file = File(
-                    getApplication<Application>().getExternalFilesDir(null),
-                    fileName
+                    getApplication<Application>().getExternalFilesDir(null), fileName
                 )
                 FileOutputStream(file).use { out ->
                     bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
                 }
-
                 _screenshotPath.value = file.absolutePath
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "فشل التقاط الشاشة: ${e.message}") }
@@ -170,11 +164,11 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    fun clearScreenshot() { _screenshotPath.value = null }
+    fun clearScreenshot() {
+        _screenshotPath.value = null
+    }
 
-    // ═══════════════════════════════════════
-    // ملخص الصفحة بالذكاء الاصطناعي
-    // ═══════════════════════════════════════
+    // ═══ ملخص الصفحة ═══
     fun summarizePage() {
         val url = _uiState.value.url
         if (url.isBlank()) return
@@ -188,15 +182,12 @@ class BrowserViewModel @Inject constructor(
                 currentPageContent = content.rawContent
 
                 val prompt = """أنت مساعد ذكي مختصر.
-
 لخّص هذه الصفحة في نقاط واضحة:
 الرابط: ${content.url}
 العنوان: ${content.title ?: ""}
 الوصف: ${content.description ?: ""}
-
 المحتوى:
 ${content.rawContent.take(3000)}
-
 قواعد:
 - لخّص في 5 نقاط رئيسية كحد أقصى
 - كن مختصراً ومفيداً
@@ -204,7 +195,6 @@ ${content.rawContent.take(3000)}
 - استخدم نقاط (•) للتنظيم"""
 
                 val response = apiClient.ask(prompt)
-
                 if (response.success) {
                     _pageSummary.value = response.response
                 } else {
@@ -218,11 +208,11 @@ ${content.rawContent.take(3000)}
         }
     }
 
-    fun clearSummary() { _pageSummary.value = null }
+    fun clearSummary() {
+        _pageSummary.value = null
+    }
 
-    // ═══════════════════════════════════════
-    // مساعد AI للصفحة
-    // ═══════════════════════════════════════
+    // ═══ مساعد AI ═══
     fun askAiAboutPage(question: String) {
         if (question.isBlank()) return
 
@@ -242,38 +232,26 @@ ${content.rawContent.take(3000)}
                 }
 
                 val prompt = """أنت مساعد ذكي يساعد المستخدم في فهم محتوى صفحة ويب.
-
 الصفحة الحالية:
 - الرابط: $url
 - العنوان: $title
 ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.take(3000)}" else ""}
-
 سؤال المستخدم: $question
-
 أجب بشكل مختصر ومفيد بالعربية."""
 
                 val response = apiClient.ask(prompt)
-
                 if (response.success) {
                     _aiMessages.update {
                         it + AiMessage(text = response.response, isUser = false)
                     }
                 } else {
                     _aiMessages.update {
-                        it + AiMessage(
-                            text = "عذراً، حدث خطأ: ${response.error}",
-                            isUser = false,
-                            isError = true
-                        )
+                        it + AiMessage(text = "عذراً، حدث خطأ: ${response.error}", isUser = false, isError = true)
                     }
                 }
             } catch (e: Exception) {
                 _aiMessages.update {
-                    it + AiMessage(
-                        text = "خطأ: ${e.message}",
-                        isUser = false,
-                        isError = true
-                    )
+                    it + AiMessage(text = "خطأ: ${e.message}", isUser = false, isError = true)
                 }
             } finally {
                 _isAiThinking.value = false
@@ -281,11 +259,11 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         }
     }
 
-    fun clearAiMessages() { _aiMessages.value = emptyList() }
+    fun clearAiMessages() {
+        _aiMessages.value = emptyList()
+    }
 
-    // ═══════════════════════════════════════
-    // ملاحظات الصفحة
-    // ═══════════════════════════════════════
+    // ═══ ملاحظات الصفحة ═══
     private fun loadNotesForCurrentUrl() {
         val url = _uiState.value.url
         if (url.isBlank()) return
@@ -302,23 +280,14 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         val state = _uiState.value
         viewModelScope.launch {
             browserDao.insertNote(
-                PageNote(
-                    url = state.url,
-                    title = state.title.ifBlank { state.url },
-                    note = noteText
-                )
+                PageNote(url = state.url, title = state.title.ifBlank { state.url }, note = noteText)
             )
         }
     }
 
     fun updateNote(note: PageNote, newText: String) {
         viewModelScope.launch {
-            browserDao.updateNote(
-                note.copy(
-                    note = newText,
-                    updatedAt = System.currentTimeMillis()
-                )
-            )
+            browserDao.updateNote(note.copy(note = newText, updatedAt = System.currentTimeMillis()))
         }
     }
 
@@ -326,19 +295,13 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         viewModelScope.launch { browserDao.deleteNote(noteId) }
     }
 
-    // ═══════════════════════════════════════
-    // التاريخ والإشارات
-    // ═══════════════════════════════════════
+    // ═══ التاريخ والإشارات ═══
     fun saveToHistory() {
         val state = _uiState.value
         if (state.url.isBlank()) return
         viewModelScope.launch {
             browserDao.insertHistory(
-                BrowserHistory(
-                    url = state.url,
-                    title = state.title.ifBlank { state.url },
-                    siteId = currentSiteId
-                )
+                BrowserHistory(url = state.url, title = state.title.ifBlank { state.url }, siteId = currentSiteId)
             )
         }
     }
@@ -353,11 +316,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                 _isBookmarked.value = false
             } else {
                 browserDao.insertBookmark(
-                    BrowserBookmark(
-                        url = state.url,
-                        title = state.title.ifBlank { state.url },
-                        siteId = currentSiteId
-                    )
+                    BrowserBookmark(url = state.url, title = state.title.ifBlank { state.url }, siteId = currentSiteId)
                 )
                 _isBookmarked.value = true
             }
@@ -373,9 +332,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         }
     }
 
-    // ═══════════════════════════════════════
-    // وضع القراءة
-    // ═══════════════════════════════════════
+    // ═══ وضع القراءة ═══
     fun toggleReaderMode() {
         val newMode = !_isReaderMode.value
         _isReaderMode.value = newMode
@@ -401,7 +358,6 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
             removeSelectors.forEach(function(s) {
                 try { document.querySelectorAll(s).forEach(function(el) { el.remove(); }); } catch(e) {}
             });
-
             var mainContent =
                 document.querySelector('article') ||
                 document.querySelector('main') ||
@@ -410,14 +366,11 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                 document.querySelector('.post-content') ||
                 document.querySelector('.entry-content') ||
                 document.body;
-
             var readerContainer = document.createElement('div');
             readerContainer.id = 'reader-mode-container';
             readerContainer.innerHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
-
             document.body.innerHTML = '';
             document.body.appendChild(readerContainer);
-
             var style = document.createElement('style');
             style.textContent = `
                 * { box-sizing: border-box; }
@@ -459,18 +412,11 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         """.trimIndent()
     }
 
-    // ═══════════════════════════════════════
-    // الترجمة
-    // ═══════════════════════════════════════
+    // ═══ الترجمة ═══
     fun startPageTranslation() {
         if (_uiState.value.url.isBlank() || _uiState.value.isTranslating) return
         _uiState.update {
-            it.copy(
-                isTranslating = true,
-                translationProgress = 0f,
-                error = null,
-                showTranslationSheet = false
-            )
+            it.copy(isTranslating = true, translationProgress = 0f, error = null, showTranslationSheet = false)
         }
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
@@ -490,7 +436,8 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         if (result is JavascriptResult.Nodes) handleExtractedNodes(result.nodes)
     }
 
-    private fun handle.value = nodes
+    private fun handleExtractedNodes(nodes: List<PageTextNode>) {
+        _extractedNodes.value = nodes
         if (nodes.isEmpty()) {
             _uiState.update {
                 it.copy(
@@ -515,12 +462,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                     _translatedNodes.value = translated
                     _pendingJs.value = translationCoordinator.replaceScript(translated)
                     _uiState.update {
-                        it.copy(
-                            isTranslating = false,
-                            isTranslationMode = true,
-                            translationProgress = 1f
-ExtractedNodes(nodes: List<PageTextNode>) {
-        _extractedNodes                        )
+                        it.copy(isTranslating = false, isTranslationMode = true, translationProgress = 1f)
                     }
                 },
                 onFailure = { error ->
@@ -546,14 +488,10 @@ ExtractedNodes(nodes: List<PageTextNode>) {
         if (result is JavascriptResult.Selection) handleSelectedText(result.text)
     }
 
-    // ═══════════════════════════════════════
-    // هنا كان القوس مفقود!
-    // ═══════════════════════════════════════
     private fun handleSelectedText(text: String) {
         viewModelScope.launch {
             val result = translationCoordinator.translateSelection(
-                text,
-                _uiState.value.targetLanguage
+                text, _uiState.value.targetLanguage
             )
             result.fold(
                 onSuccess = { translated ->
@@ -561,30 +499,25 @@ ExtractedNodes(nodes: List<PageTextNode>) {
                 },
                 onFailure = { error ->
                     _uiState.update {
-                        it.copy(
-                            error = "فشل ترجمة النص المحدد: ${error.message ?: "خطأ غير معروف"}"
-                        )
+                        it.copy(error = "فشل ترجمة النص المحدد: ${error.message ?: "خطأ غير معروف"}")
                     }
                 }
             )
         }
-    } // ← هذا القوس كان مفقود!
+    }
 
     fun resetTranslation() {
         _uiState.update {
-            it.copy(
-                isTranslationMode = false,
-                isTranslating = false,
-                translationProgress = 0f,
-                error = null
-            )
+            it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f, error = null)
         }
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
         _pendingJs.value = "window.location.reload();"
     }
 
-    fun clearError() { _uiState.update { it.copy(error = null) } }
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
 
     fun deleteHistory(id: Int) {
         viewModelScope.launch { browserDao.deleteHistory(id) }
@@ -599,7 +532,6 @@ ExtractedNodes(nodes: List<PageTextNode>) {
     }
 }
 
-// ═══ نموذج رسائل AI ═══
 data class AiMessage(
     val text: String,
     val isUser: Boolean,
