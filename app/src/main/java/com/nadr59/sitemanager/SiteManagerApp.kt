@@ -8,11 +8,12 @@ import timber.log.Timber
 
 @HiltAndroidApp
 class SiteManagerApp : Application() {
+
     override fun onCreate() {
         super.onCreate()
-        
-        // تفعيل Timber للـ Debug فقط
-        if (com.nadr59.sitemanager.BuildConfig.DEBUG) {
+
+        // تهيئة Timber للـ logging
+        if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
     }
