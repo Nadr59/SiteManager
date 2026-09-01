@@ -1,559 +1,145 @@
-package com.nadr59.sitemanager.viewmodel
+// app/src/main/java/com/nadr59/sitemanager/ui/viewmodel/BrowserViewModel.kt
+// أضف هذه التعديلات على الكود الموجود
 
-import android.app.Application
-import android.graphics.Bitmap
-import android.graphics.Canvas
+package com.nadr59.sitemanager.ui.viewmodel
+
 import android.webkit.WebView
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nadr59.sitemanager.data.local.BrowserBookmark
 import com.nadr59.sitemanager.data.local.BrowserHistory
 import com.nadr59.sitemanager.data.local.PageNote
-import com.nadr59.sitemanager.data.local.SiteDatabase
 import com.nadr59.sitemanager.data.model.BrowserState
-import com.nadr59.sitemanager.data.model.PageTextNode
-import com.nadr59.sitemanager.data.model.TranslatedNode
 import com.nadr59.sitemanager.data.remote.ApiClient
 import com.nadr59.sitemanager.data.remote.WebScraper
 import com.nadr59.sitemanager.data.repository.SiteRepository
 import com.nadr59.sitemanager.data.repository.TranslationRepository
+import com.nadr59.sitemanager.domain.translator.TranslationOperation
+import com.nadr59.sitemanager.domain.translator.WebPageTranslationCoordinator
 import com.nadr59.sitemanager.domain.translator.WebPageTranslator
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import org.json.JSONObject
-import java.io.File
-import java.io.FileOutputStream
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
 class BrowserViewModel @Inject constructor(
-    application: Application,
-    private val translationRepository: TranslationRepository
-) : AndroidViewModel(application) {
+    private val siteRepository: SiteRepository,
+    private val translationRepository: TranslationRepository,
+    private val translationCoordinator: WebPageTranslationCoordinator // ⭐ جديد
+) : ViewModel() {
 
-    private val database = SiteDatabase.getDatabase(application)
-    private val dao = database.siteDao()
-    private val browserDao = database.browserDao()
-    private val siteRepository = SiteRepository(dao)
+    // الخدمات القديمة (نبقيها للتوافق)
     private val pageTranslator = WebPageTranslator()
     private val apiClient = ApiClient()
     private val webScraper = WebScraper()
 
-    // ═══ الحالة الرئيسية ═══
+    // WebView reference
+    private var currentWebView: WebView? = null // ⭐ جديد
+
+    // حالة UI
     private val _uiState = MutableStateFlow(BrowserState())
     val uiState: StateFlow<BrowserState> = _uiState.asStateFlow()
 
-    // ═══ العقد المستخرجة ═══
-    private val _extractedNodes = MutableStateFlow<List<PageTextNode>>(emptyList())
-    val extractedNodes: StateFlow<List<PageTextNode>> = _extractedNodes.asStateFlow()
-
-    private val _translatedNodes = MutableStateFlow<List<TranslatedNode>>(emptyList())
-    val translatedNodes: StateFlow<List<TranslatedNode>> = _translatedNodes.asStateFlow()
-
-    // ═══ JavaScript ═══
+    // JavaScript معلق
     private val _pendingJs = MutableStateFlow<String?>(null)
     val pendingJs: StateFlow<String?> = _pendingJs.asStateFlow()
 
-    // ═══ الملاحظات ═══
+    // ملاحظات الصفحة
     private val _pageNotes = MutableStateFlow<List<PageNote>>(emptyList())
     val pageNotes: StateFlow<List<PageNote>> = _pageNotes.asStateFlow()
 
-    private val _hasNotes = MutableStateFlow(false)
-    val hasNotes: StateFlow<Boolean> = _hasNotes.asStateFlow()
-
-    // ═══ ملخص الصفحة ═══
+    // ملخص الصفحة
     private val _pageSummary = MutableStateFlow<String?>(null)
     val pageSummary: StateFlow<String?> = _pageSummary.asStateFlow()
 
-    private val _isSummarizing = MutableStateFlow(false)
-    val isSummarizing: StateFlow<Boolean> = _isSummarizing.asStateFlow()
+    // محادثة AI
+    private val _aiMessages = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val aiMessages: StateFlow<List<Pair<String, String>>> = _aiMessages.asStateFlow()
 
-    // ═══ مساعد AI ═══
-    private val _aiMessages = MutableStateFlow<List<AiMessage>>(emptyList())
-    val aiMessages: StateFlow<List<AiMessage>> = _aiMessages.asStateFlow()
+    // لقطة الشاشة
+    private val _screenshot = MutableStateFlow<android.graphics.Bitmap?>(null)
+    val screenshot: StateFlow<android.graphics.Bitmap?> = _screenshot.asStateFlow()
 
-    private val _isAiThinking = MutableStateFlow(false)
-    val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
+    // History
+    private val _history = MutableStateFlow<List<BrowserHistory>>(emptyList())
+    val history: StateFlow<List<BrowserHistory>> = _history.asStateFlow()
 
-    // ═══ لقطة الشاشة ═══
-    private val _screenshotPath = MutableStateFlow<String?>(null)
-    val screenshotPath: StateFlow<String?> = _screenshotPath.asStateFlow()
+    // Bookmarks
+    private val _bookmarks = MutableStateFlow<List<BrowserBookmark>>(emptyList())
+    val bookmarks: StateFlow<List<BrowserBookmark>> = _bookmarks.asStateFlow()
 
-    // ═══ التاريخ والإشارات ═══
-    val browserHistory = browserDao.getAllHistory()
-    val bookmarks = browserDao.getAllBookmarks()
+    // Reader Mode
+    private val _readerModeContent = MutableStateFlow<String?>(null)
+    val readerModeContent: StateFlow<String?> = _readerModeContent.asStateFlow()
 
-    private val _isBookmarked = MutableStateFlow(false)
-    val isBookmarked: StateFlow<Boolean> = _isBookmarked.asStateFlow()
+    // معرف الموقع الحالي
+    private var currentSiteId: Int? = null
 
-    private val _isReaderMode = MutableStateFlow(false)
-    val isReaderMode: StateFlow<Boolean> = _isReaderMode.asStateFlow()
+    init {
+        loadHistory()
+        loadBookmarks()
+    }
 
-    private var currentSiteId = 0
-    private var currentPageContent = ""
+    /**
+     * تسجيل WebView الحالي
+     */
+    fun registerWebView(webView: WebView) { // ⭐ جديد
+        currentWebView = webView
+        Timber.d("تم تسجيل WebView")
+    }
 
-    fun onJsExecuted() { _pendingJs.value = null }
+    /**
+     * إلغاء تسجيل WebView
+     */
+    fun unregisterWebView() { // ⭐ جديد
+        currentWebView = null
+        Timber.d("تم إلغاء تسجيل WebView")
+    }
 
-    // ═══ تحميل الموقع ═══
+    /**
+     * تحميل موقع
+     */
     fun loadSite(siteId: Int) {
         currentSiteId = siteId
+
         viewModelScope.launch {
             try {
                 val site = siteRepository.getSiteById(siteId)
+
                 if (site != null) {
                     _uiState.update { it.copy(url = site.url, title = site.name) }
-                } else {
-                    _uiState.update { it.copy(error = "الموقع غير موجود") }
+
+                    // تحديث عدد الزيارات
+                    siteRepository.incrementVisitCount(siteId)
+
+                    // تحميل ملاحظات الصفحة
+                    loadPageNotes(site.url)
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "فشل التحميل: ${e.message}") }
+                Timber.e(e, "فشل في تحميل الموقع")
             }
         }
     }
 
-    fun loadUrl(url: String) { _uiState.update { it.copy(url = url) } }
-
-    fun updateTitle(title: String) {
-        _uiState.update { it.copy(title = title) }
-        checkBookmarkStatus()
-        loadNotesForCurrentUrl()
-    }
-
-    fun updateProgress(progress: Int) {
-        _uiState.update { it.copy(progress = progress, isLoading = progress < 100) }
-    }
-
-    fun setLoading(isLoading: Boolean) {
-        _uiState.update { it.copy(isLoading = isLoading) }
-    }
-
-    fun updateNavigation(canGoBack: Boolean, canGoForward: Boolean) {
-        _uiState.update { it.copy(canGoBack = canGoBack, canGoForward = canGoForward) }
-    }
-
-    fun setTargetLanguage(language: String) {
-        _uiState.update { it.copy(targetLanguage = language) }
-    }
-
-    fun showTranslationSheet() { _uiState.update { it.copy(showTranslationSheet = true) } }
-    fun hideTranslationSheet() { _uiState.update { it.copy(showTranslationSheet = false) } }
-
-    // ═══════════════════════════════════════
-    // لقطة الشاشة
-    // ═══════════════════════════════════════
-    fun takeScreenshot(webView: WebView) {
-        viewModelScope.launch {
-            try {
-                val bitmap = Bitmap.createBitmap(
-                    webView.width,
-                    webView.height,
-                    Bitmap.Config.ARGB_8888
-                )
-                val canvas = Canvas(bitmap)
-                webView.draw(canvas)
-
-                val fileName = "screenshot_${System.currentTimeMillis()}.png"
-                val file = File(
-                    getApplication<Application>().getExternalFilesDir(null),
-                    fileName
-                )
-                FileOutputStream(file).use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
-                }
-
-                _screenshotPath.value = file.absolutePath
-            } catch (e: Exception) {
-                _uiState.update { it.copy(error = "فشل التقاط الشاشة: ${e.message}") }
-            }
+    /**
+     * ترجمة الصفحة باستخدام Coordinator ⭐ جديد
+     */
+    fun startPageTranslationWithCoordinator() {
+        val webView = currentWebView
+        if (webView == null) {
+            Timber.e("WebView غير مسجل")
+            _uiState.update { it.copy(error = "خطأ داخلي: WebView غير متوفر") }
+            return
         }
-    }
 
-    fun clearScreenshot() { _screenshotPath.value = null }
-
-    // ═══════════════════════════════════════
-    // ملخص الصفحة بالذكاء الاصطناعي
-    // ═══════════════════════════════════════
-    fun summarizePage() {
-        val url = _uiState.value.url
-        if (url.isBlank()) return
-
-        _isSummarizing.value = true
-        _pageSummary.value = null
-
-        viewModelScope.launch {
-            try {
-                // جلب محتوى الصفحة
-                val content = webScraper.scrape(url)
-                currentPageContent = content.rawContent
-
-                val prompt = """أنت مساعد ذكي مختصر.
-
-لخّص هذه الصفحة في نقاط واضحة:
-الرابط: ${content.url}
-العنوان: ${content.title ?: ""}
-الوصف: ${content.description ?: ""}
-
-المحتوى:
-${content.rawContent.take(3000)}
-
-قواعد:
-- لخّص في 5 نقاط رئيسية كحد أقصى
-- كن مختصراً ومفيداً
-- أجب بالعربية
-- استخدم نقاط (•) للتنظيم"""
-
-                val response = apiClient.ask(prompt)
-
-                if (response.success) {
-                    _pageSummary.value = response.response
-                } else {
-                    _uiState.update { it.copy(error = response.error) }
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(error = "فشل التلخيص: ${e.message}") }
-            } finally {
-                _isSummarizing.value = false
-            }
+        val currentUrl = _uiState.value.url
+        if (currentUrl.isBlank()) {
+            Timber.e("لا يوجد URL للترجمة")
+            return
         }
-    }
 
-    fun clearSummary() { _pageSummary.value = null }
-
-    // ═══════════════════════════════════════
-    // مساعد AI للصفحة
-    // ═══════════════════════════════════════
-    fun askAiAboutPage(question: String) {
-        if (question.isBlank()) return
-
-        val url = _uiState.value.url
-        val title = _uiState.value.title
-
-        // إضافة رسالة المستخدم
-        _aiMessages.update { it + AiMessage(text = question, isUser = true) }
-        _isAiThinking.value = true
-
-        viewModelScope.launch {
-            try {
-                // جلب المحتوى إذا لم يكن محملاً
-                if (currentPageContent.isBlank()) {
-                    try {
-                        val content = webScraper.scrape(url)
-                        currentPageContent = content.rawContent
-                    } catch (_: Exception) {}
-                }
-
-                val prompt = """أنت مساعد ذكي يساعد المستخدم في فهم محتوى صفحة ويب.
-
-الصفحة الحالية:
-- الرابط: $url
-- العنوان: $title
-${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.take(3000)}" else ""}
-
-سؤال المستخدم: $question
-
-أجب بشكل مختصر ومفيد بالعربية."""
-
-                val response = apiClient.ask(prompt)
-
-                if (response.success) {
-                    _aiMessages.update {
-                        it + AiMessage(text = response.response, isUser = false)
-                    }
-                } else {
-                    _aiMessages.update {
-                        it + AiMessage(
-                            text = "عذراً، حدث خطأ: ${response.error}",
-                            isUser = false,
-                            isError = true
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                _aiMessages.update {
-                    it + AiMessage(
-                        text = "خطأ: ${e.message}",
-                        isUser = false,
-                        isError = true
-                    )
-                }
-            } finally {
-                _isAiThinking.value = false
-            }
-        }
-    }
-
-    fun clearAiMessages() { _aiMessages.value = emptyList() }
-
-    // ═══════════════════════════════════════
-    // ملاحظات الصفحة
-    // ═══════════════════════════════════════
-    private fun loadNotesForCurrentUrl() {
-        val url = _uiState.value.url
-        if (url.isBlank()) return
-        viewModelScope.launch {
-            browserDao.getNotesForUrl(url).collect { notes ->
-                _pageNotes.value = notes
-                _hasNotes.value = notes.isNotEmpty()
-            }
-        }
-    }
-
-    fun addNote(noteText: String) {
-        if (noteText.isBlank()) return
-        val state = _uiState.value
-        viewModelScope.launch {
-            browserDao.insertNote(
-                PageNote(
-                    url = state.url,
-                    title = state.title.ifBlank { state.url },
-                    note = noteText
-                )
-            )
-        }
-    }
-
-    fun updateNote(note: PageNote, newText: String) {
-        viewModelScope.launch {
-            browserDao.updateNote(
-                note.copy(
-                    note = newText,
-                    updatedAt = System.currentTimeMillis()
-                )
-            )
-        }
-    }
-
-    fun deleteNote(noteId: Int) {
-        viewModelScope.launch { browserDao.deleteNote(noteId) }
-    }
-
-    // ═══════════════════════════════════════
-    // التاريخ والإشارات
-    // ═══════════════════════════════════════
-    fun saveToHistory() {
-        val state = _uiState.value
-        if (state.url.isBlank()) return
-        viewModelScope.launch {
-            browserDao.insertHistory(
-                BrowserHistory(
-                    url = state.url,
-                    title = state.title.ifBlank { state.url },
-                    siteId = currentSiteId
-                )
-            )
-        }
-    }
-
-    fun toggleBookmark() {
-        val state = _uiState.value
-        if (state.url.isBlank()) return
-        viewModelScope.launch {
-            val existing = browserDao.getBookmarkByUrl(state.url)
-            if (existing != null) {
-                browserDao.deleteBookmark(existing.id)
-                _isBookmarked.value = false
-            } else {
-                browserDao.insertBookmark(
-                    BrowserBookmark(
-                        url = state.url,
-                        title = state.title.ifBlank { state.url },
-                        siteId = currentSiteId
-                    )
-                )
-                _isBookmarked.value = true
-            }
-        }
-    }
-
-    private fun checkBookmarkStatus() {
-        viewModelScope.launch {
-            val url = _uiState.value.url
-            if (url.isNotBlank()) {
-                _isBookmarked.value = browserDao.isBookmarked(url) > 0
-            }
-        }
-    }
-
-    // ═══════════════════════════════════════
-    // وضع القراءة
-    // ═══════════════════════════════════════
-    fun toggleReaderMode() {
-        val newMode = !_isReaderMode.value
-        _isReaderMode.value = newMode
-        _pendingJs.value = if (newMode) buildEnhancedReaderModeScript()
-        else "window.location.reload();"
-    }
-
-    private fun buildEnhancedReaderModeScript(): String {
-        return """
-        (function() {
-            // ═══ إزالة العناصر الزائدة ═══
-            var removeSelectors = [
-                'header:not(article header)',
-                'footer',
-                'nav',
-                'aside',
-                '.ad', '.ads', '.advertisement', '.banner',
-                '.sidebar', '.widget', '.popup', '.modal',
-                '.cookie-notice', '.newsletter-signup',
-                '[class*="ad-"]', '[id*="ad-"]',
-                '[class*="social"]', '[class*="share"]',
-                '[class*="related"]', '[class*="recommended"]',
-                'script', 'style', 'iframe',
-                '.comments', '#comments',
-                '.sticky', '[class*="sticky"]'
-            ];
-            
-            removeSelectors.forEach(function(s) {
-                try {
-                    document.querySelectorAll(s).forEach(function(el) {
-                        el.remove();
-                    });
-                } catch(e) {}
-            });
-
-            // ═══ استخراج المحتوى الرئيسي ═══
-            var mainContent = 
-                document.querySelector('article') ||
-                document.querySelector('main') ||
-                document.querySelector('[role="main"]') ||
-                document.querySelector('.content') ||
-                document.querySelector('.post-content') ||
-                document.querySelector('.entry-content') ||
-                document.body;
-
-            // ═══ إنشاء حاوية القراءة ═══
-            var readerContainer = document.createElement('div');
-            readerContainer.id = 'reader-mode-container';
-            readerContainer.innerHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
-
-            // ═══ تطبيق الستايل ═══
-            document.body.innerHTML = '';
-            document.body.appendChild(readerContainer);
-
-            var style = document.createElement('style');
-            style.textContent = `
-                * { box-sizing: border-box; }
-                
-                body {
-                    background: #FAFAFA !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                }
-                
-                #reader-mode-container {
-                    max-width: 720px !important;
-                    margin: 0 auto !important;
-                    padding: 24px 20px 48px !important;
-                    font-family: 'Georgia', 'Times New Roman', serif !important;
-                    font-size: 19px !important;
-                    line-height: 1.9 !important;
-                    color: #2C2C2C !important;
-                    background: #FAFAFA !important;
-                }
-                
-                #reader-mode-container h1,
-                #reader-mode-container h2,
-                #reader-mode-container h3,
-                #reader-mode-container h4 {
-                    font-family: sans-serif !important;
-                    color: #1A1A1A !important;
-                    margin-top: 1.5em !important;
-                    line-height: 1.4 !important;
-                }
-                
-                #reader-mode-container h1 { font-size: 28px !important; }
-                #reader-mode-container h2 { font-size: 23px !important; }
-                #reader-mode-container h3 { font-size: 19px !important; }
-                
-                #reader-mode-container p {
-                    margin-bottom: 1.2em !important;
-                    text-align: justify !important;
-                }
-                
-                #reader-mode-container img {
-                    max-width: 100% !important;
-                    height: auto !important;
-                    border-radius: 8px !important;
-                    margin: 16px 0 !important;
-                    display: block !important;
-                }
-                
-                #reader-mode-container a {
-                    color: #1565C0 !important;
-                    text-decoration: underline !important;
-                }
-                
-                #reader-mode-container blockquote {
-                    border-right: 4px solid #1565C0 !important;
-                    border-left: none !important;
-                    padding: 8px 16px !important;
-                    margin: 16px 0 !important;
-                    background: #F0F4FF !important;
-                    border-radius: 0 8px 8px 0 !important;
-                    font-style: italic !important;
-                }
-                
-                #reader-mode-container pre,
-                #reader-mode-container code {
-                    background: #F5F5F5 !important;
-                    border-radius: 4px !important;
-                    padding: 2px 6px !important;
-                    font-family: monospace !important;
-                    font-size: 16px !important;
-                }
-                
-                #reader-mode-container pre {
-                    padding: 16px !important;
-                    overflow-x: auto !important;
-                    margin: 16px 0 !important;
-                }
-                
-                #reader-mode-container ul,
-                #reader-mode-container ol {
-                    padding-right: 24px !important;
-                    padding-left: 0 !important;
-                }
-                
-                #reader-mode-container li {
-                    margin-bottom: 8px !important;
-                }
-                
-                #reader-mode-container table {
-                    width: 100% !important;
-                    border-collapse: collapse !important;
-                    margin: 16px 0 !important;
-                }
-                
-                #reader-mode-container td,
-                #reader-mode-container th {
-                    border: 1px solid #DDD !important;
-                    padding: 8px 12px !important;
-                }
-                
-                #reader-mode-container th {
-                    background: #F0F0F0 !important;
-                    font-weight: bold !important;
-                }
-            `;
-            document.head.appendChild(style);
-
-            // ═══ ضبط الاتجاه ═══
-            document.documentElement.setAttribute('dir', 'auto');
-            
-            return 'reader_mode_enabled';
-        })();
-        """.trimIndent()
-    }
-
-    // ═══════════════════════════════════════
-    // الترجمة
-    // ═══════════════════════════════════════
-    fun startPageTranslation() {
         _uiState.update {
             it.copy(
                 isTranslating = true,
@@ -562,97 +148,369 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                 showTranslationSheet = false
             )
         }
-        _pendingJs.value = pageTranslator.buildExtractScript()
+
+        viewModelScope.launch {
+            try {
+                translationCoordinator.translatePage(
+                    webView = webView,
+                    url = currentUrl,
+                    targetLanguage = _uiState.value.targetLanguage,
+                    onProgress = { operation ->
+                        when (operation) {
+                            is TranslationOperation.Progress -> {
+                                _uiState.update {
+                                    it.copy(
+                                        translationProgress = operation.percentage / 100f
+                                    )
+                                }
+                                Timber.d("تقدم الترجمة: ${operation.current}/${operation.total}")
+                            }
+                            is TranslationOperation.Success -> {
+                                _uiState.update {
+                                    it.copy(
+                                        isTranslating = false,
+                                        isTranslationMode = true,
+                                        translationProgress = 1f,
+                                        error = null
+                                    )
+                                }
+                                Timber.d("نجحت الترجمة: ${operation.state.translatedCount} عقدة")
+                            }
+                            is TranslationOperation.Failure -> {
+                                _uiState.update {
+                                    it.copy(
+                                        isTranslating = false,
+                                        error = operation.error
+                                    )
+                                }
+                                Timber.e("فشلت الترجمة: ${operation.error}")
+                            }
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "خطأ في ترجمة الصفحة")
+                _uiState.update {
+                    it.copy(
+                        isTranslating = false,
+                        error = e.message ?: "فشل في ترجمة الصفحة"
+                    )
+                }
+            }
+        }
     }
 
-    fun onNodesExtracted(jsonString: String) {
-        val nodes: List<PageTextNode> = pageTranslator.parseExtractedNodes(jsonString)
-        _extractedNodes.value = nodes
-
-        if (nodes.isEmpty()) {
-            _uiState.update { it.copy(isTranslating = false, error = "لا يوجد نص للترجمة") }
+    /**
+     * ترجمة النص المحدد باستخدام Coordinator ⭐ جديد
+     */
+    fun translateSelectionWithCoordinator() {
+        val webView = currentWebView
+        if (webView == null) {
+            Timber.e("WebView غير مسجل")
             return
         }
 
+        _uiState.update { it.copy(isTranslating = true) }
+
         viewModelScope.launch {
-            val result = translationRepository.translatePageNodes(
-                nodes = nodes,
-                targetLanguage = _uiState.value.targetLanguage,
-                onProgress = { p -> _uiState.update { it.copy(translationProgress = p) } }
-            )
-            result.fold(
-                onSuccess = { translated: List<TranslatedNode> ->
-                    _translatedNodes.value = translated
-                    _pendingJs.value = pageTranslator.buildReplaceScript(translated)
-                    _uiState.update {
-                        it.copy(
-                            isTranslating = false,
-                            isTranslationMode = true,
-                            translationProgress = 1f
-                        )
-                    }
-                },
-                onFailure = { e ->
-                    _uiState.update {
-                        it.copy(isTranslating = false, error = "فشل الترجمة: ${e.message}")
-                    }
-                }
-            )
-        }
-    }
-
-    fun translateSelectedText() { _pendingJs.value = pageTranslator.buildSelectionScript() }
-
-    fun onTextSelected(jsonString: String) {
-        try {
-            val json = JSONObject(jsonString)
-            val text = json.optString("text", "")
-            if (text.isBlank()) return
-            viewModelScope.launch {
-                val result = translationRepository.translateText(
-                    text = text,
+            try {
+                val result = translationCoordinator.translateSelection(
+                    webView = webView,
                     targetLanguage = _uiState.value.targetLanguage
                 )
-                result.fold(
-                    onSuccess = { translated ->
-                        _pendingJs.value = pageTranslator.buildReplaceSelectionScript(translated)
-                    },
-                    onFailure = { e ->
-                        _uiState.update { it.copy(error = "فشل الترجمة: ${e.message}") }
-                    }
-                )
+
+                if (result.isSuccess) {
+                    val (original, translated) = result.getOrThrow()
+                    Timber.d("تمت ترجمة النص المحدد: ${original.take(30)}... -> ${translated.take(30)}...")
+                } else {
+                    Timber.e("فشل في ترجمة النص المحدد")
+                }
+
+                _uiState.update { it.copy(isTranslating = false) }
+
+            } catch (e: Exception) {
+                Timber.e(e, "خطأ في ترجمة النص المحدد")
+                _uiState.update {
+                    it.copy(
+                        isTranslating = false,
+                        error = e.message
+                    )
+                }
             }
-        } catch (_: Exception) {}
-    }
-
-    fun resetTranslation() {
-        _uiState.update {
-            it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f)
         }
-        _extractedNodes.value = emptyList()
-        _translatedNodes.value = emptyList()
-        _pendingJs.value = "window.location.reload();"
     }
 
-    fun clearError() { _uiState.update { it.copy(error = null) } }
+    /**
+     * استعادة النص الأصلي باستخدام Coordinator ⭐ جديد
+     */
+    fun restoreOriginalWithCoordinator() {
+        val webView = currentWebView
+        if (webView == null) {
+            Timber.e("WebView غير مسجل")
+            return
+        }
 
-    fun deleteHistory(id: Int) {
-        viewModelScope.launch { browserDao.deleteHistory(id) }
+        val currentUrl = _uiState.value.url
+        if (currentUrl.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                translationCoordinator.restoreOriginalPage(
+                    webView = webView,
+                    url = currentUrl
+                ).onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            isTranslationMode = false,
+                            translationProgress = 0f
+                        )
+                    }
+                    Timber.d("تمت استعادة النص الأصلي")
+                }.onFailure { e ->
+                    Timber.e(e, "فشل في استعادة النص الأصلي")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "خطأ في استعادة النص الأصلي")
+            }
+        }
+    }
+
+    /**
+     * الطريقة القديمة للترجمة (للتوافق)
+     */
+    fun startPageTranslation() {
+        // يمكن الاحتفاظ بها أو استبدالها
+        startPageTranslationWithCoordinator()
+    }
+
+    /**
+     * الطريقة القديمة لترجمة النص المحدد (للتوافق)
+     */
+    fun translateSelectedText() {
+        translateSelectionWithCoordinator()
+    }
+
+    /**
+     * إعادة تعيين الترجمة
+     */
+    fun resetTranslation() {
+        restoreOriginalWithCoordinator()
+    }
+
+    // ==================== بقية الدوال الموجودة ====================
+
+    fun updateUrl(url: String) {
+        _uiState.update { it.copy(url = url) }
+    }
+
+    fun updateTitle(title: String) {
+        _uiState.update { it.copy(title = title) }
+    }
+
+    fun updateLoadingState(isLoading: Boolean) {
+        _uiState.update { it.copy(isLoading = isLoading) }
+    }
+
+    fun updateProgress(progress: Int) {
+        _uiState.update { it.copy(progress = progress) }
+    }
+
+    fun updateNavigationState(canGoBack: Boolean, canGoForward: Boolean) {
+        _uiState.update { it.copy(canGoBack = canGoBack, canGoForward = canGoForward) }
+    }
+
+    fun showTranslationSheet() {
+        _uiState.update { it.copy(showTranslationSheet = true) }
+    }
+
+    fun hideTranslationSheet() {
+        _uiState.update { it.copy(showTranslationSheet = false) }
+    }
+
+    fun setTargetLanguage(language: String) {
+        _uiState.update { it.copy(targetLanguage = language) }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    fun consumePendingJs() {
+        _pendingJs.value = null
+    }
+
+    // History
+    private fun loadHistory() {
+        viewModelScope.launch {
+            translationRepository.getAllHistory().collect { historyList ->
+                _history.value = historyList
+            }
+        }
+    }
+
+    fun addToHistory(url: String, title: String) {
+        viewModelScope.launch {
+            try {
+                val history = BrowserHistory(
+                    url = url,
+                    title = title,
+                    visitedAt = System.currentTimeMillis(),
+                    siteId = currentSiteId
+                )
+                translationRepository.insertHistory(history)
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في إضافة التاريخ")
+            }
+        }
+    }
+
+    fun deleteHistory(history: BrowserHistory) {
+        viewModelScope.launch {
+            translationRepository.deleteHistory(history)
+        }
     }
 
     fun clearAllHistory() {
-        viewModelScope.launch { browserDao.clearAllHistory() }
+        viewModelScope.launch {
+            translationRepository.clearAllHistory()
+        }
     }
 
-    fun deleteBookmark(id: Int) {
-        viewModelScope.launch { browserDao.deleteBookmark(id) }
+    // Bookmarks
+    private fun loadBookmarks() {
+        viewModelScope.launch {
+            translationRepository.getAllBookmarks().collect { bookmarkList ->
+                _bookmarks.value = bookmarkList
+            }
+        }
+    }
+
+    fun addBookmark(url: String, title: String) {
+        viewModelScope.launch {
+            try {
+                val bookmark = BrowserBookmark(
+                    url = url,
+                    title = title,
+                    createdAt = System.currentTimeMillis(),
+                    siteId = currentSiteId
+                )
+                translationRepository.insertBookmark(bookmark)
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في إضافة الإشارة المرجعية")
+            }
+        }
+    }
+
+    fun deleteBookmark(bookmark: BrowserBookmark) {
+        viewModelScope.launch {
+            translationRepository.deleteBookmark(bookmark)
+        }
+    }
+
+    // Page Notes
+    private fun loadPageNotes(url: String) {
+        viewModelScope.launch {
+            translationRepository.getPageNotes(url).collect { notes ->
+                _pageNotes.value = notes
+            }
+        }
+    }
+
+    fun addPageNote(url: String, title: String, note: String) {
+        viewModelScope.launch {
+            try {
+                val pageNote = PageNote(
+                    url = url,
+                    title = title,
+                    note = note,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                translationRepository.insertPageNote(pageNote)
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في إضافة الملاحظة")
+            }
+        }
+    }
+
+    fun deletePageNote(note: PageNote) {
+        viewModelScope.launch {
+            translationRepository.deletePageNote(note)
+        }
+    }
+
+    // AI Features
+    fun summarizePage() {
+        viewModelScope.launch {
+            try {
+                val url = _uiState.value.url
+                val content = webScraper.scrapeWebsite(url)
+                
+                val prompt = """
+                    لخص هذه الصفحة بشكل مختصر ومفيد:
+                    
+                    ${content.take(3000)}
+                """.trimIndent()
+
+                val summary = apiClient.sendPrompt(prompt)
+                _pageSummary.value = summary
+
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في تلخيص الصفحة")
+                _uiState.update { it.copy(error = "فشل في تلخيص الصفحة") }
+            }
+        }
+    }
+
+    fun askAI(question: String) {
+        viewModelScope.launch {
+            try {
+                val url = _uiState.value.url
+                val content = webScraper.scrapeWebsite(url)
+                
+                val prompt = """
+                    بناءً على محتوى هذه الصفحة:
+                    ${content.take(2000)}
+                    
+                    السؤال: $question
+                """.trimIndent()
+
+                val answer = apiClient.sendPrompt(prompt)
+                _aiMessages.value = _aiMessages.value + (question to answer)
+
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في الحصول على إجابة AI")
+            }
+        }
+    }
+
+    fun enableReaderMode() {
+        viewModelScope.launch {
+            try {
+                val url = _uiState.value.url
+                val content = webScraper.scrapeWebsite(url)
+                _readerModeContent.value = content
+
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في تفعيل وضع القراءة")
+            }
+        }
+    }
+
+    fun disableReaderMode() {
+        _readerModeContent.value = null
+    }
+
+    fun captureScreenshot(bitmap: android.graphics.Bitmap) {
+        _screenshot.value = bitmap
+    }
+
+    fun clearScreenshot() {
+        _screenshot.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        unregisterWebView()
     }
 }
-
-// ═══ نموذج رسائل AI ═══
-data class AiMessage(
-    val text: String,
-    val isUser: Boolean,
-    val isError: Boolean = false,
-    val timestamp: Long = System.currentTimeMillis()
-)
