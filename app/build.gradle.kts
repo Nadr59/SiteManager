@@ -91,5 +91,7 @@ dependencies {
     implementation("com.github.jeziellago:compose-markdown:0.5.4")
 // Coil للصور
 implementation("io.coil-kt:coil-compose:2.7.0")
+// Logging
+    implementation("com.jakewharton.timber:timber:5.0.1")
 
 }
