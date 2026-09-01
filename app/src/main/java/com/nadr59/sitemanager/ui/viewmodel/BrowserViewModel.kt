@@ -513,4 +513,154 @@ class BrowserViewModel @Inject constructor(
         super.onCleared()
         unregisterWebView()
     }
+    // ⭐ أضف هذه الخاصية
+    private var currentWebView: WebView? = null
+
+    // ⭐ أضف هذه الدوال الجديدة فقط
+
+    fun registerWebView(webView: WebView) {
+        currentWebView = webView
+        android.util.Log.d("BrowserViewModel", "تم تسجيل WebView")
+    }
+
+    fun unregisterWebView() {
+        currentWebView = null
+        android.util.Log.d("BrowserViewModel", "تم إلغاء تسجيل WebView")
+    }
+
+    fun startPageTranslationWithCoordinator() {
+        val webView = currentWebView
+        if (webView == null) {
+            android.util.Log.e("BrowserViewModel", "WebView غير مسجل")
+            _uiState.update { it.copy(error = "خطأ داخلي: WebView غير متوفر") }
+            return
+        }
+
+        val currentUrl = _uiState.value.url
+        if (currentUrl.isBlank()) {
+            android.util.Log.e("BrowserViewModel", "لا يوجد URL للترجمة")
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                isTranslating = true,
+                translationProgress = 0f,
+                error = null,
+                showTranslationSheet = false
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                translationCoordinator.translatePage(
+                    webView = webView,
+                    url = currentUrl,
+                    targetLanguage = _uiState.value.targetLanguage,
+                    onProgress = { operation ->
+                        when (operation) {
+                            is TranslationOperation.Progress -> {
+                                _uiState.update {
+                                    it.copy(
+                                        translationProgress = operation.percentage / 100f
+                                    )
+                                }
+                            }
+                            is TranslationOperation.Success -> {
+                                _uiState.update {
+                                    it.copy(
+                                        isTranslating = false,
+                                        isTranslationMode = true,
+                                        translationProgress = 1f,
+                                        error = null
+                                    )
+                                }
+                            }
+                            is TranslationOperation.Failure -> {
+                                _uiState.update {
+                                    it.copy(
+                                        isTranslating = false,
+                                        error = operation.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserViewModel", "خطأ في ترجمة الصفحة", e)
+                _uiState.update {
+                    it.copy(
+                        isTranslating = false,
+                        error = e.message ?: "فشل في ترجمة الصفحة"
+                    )
+                }
+            }
+        }
+    }
+
+    fun translateSelectionWithCoordinator() {
+        val webView = currentWebView
+        if (webView == null) {
+            android.util.Log.e("BrowserViewModel", "WebView غير مسجل")
+            return
+        }
+
+        _uiState.update { it.copy(isTranslating = true) }
+
+        viewModelScope.launch {
+            try {
+                translationCoordinator.translateSelection(
+                    webView = webView,
+                    targetLanguage = _uiState.value.targetLanguage
+                )
+                _uiState.update { it.copy(isTranslating = false) }
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserViewModel", "خطأ في ترجمة النص المحدد", e)
+                _uiState.update {
+                    it.copy(
+                        isTranslating = false,
+                        error = e.message
+                    )
+                }
+            }
+        }
+    }
+
+    fun restoreOriginalWithCoordinator() {
+        val webView = currentWebView
+        if (webView == null) {
+            android.util.Log.e("BrowserViewModel", "WebView غير مسجل")
+            return
+        }
+
+        val currentUrl = _uiState.value.url
+        if (currentUrl.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                translationCoordinator.restoreOriginalPage(
+                    webView = webView,
+                    url = currentUrl
+                ).onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            isTranslationMode = false,
+                            translationProgress = 0f
+                        )
+                    }
+                }.onFailure { e ->
+                    android.util.Log.e("BrowserViewModel", "فشل في استعادة النص الأصلي", e)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserViewModel", "خطأ في استعادة النص الأصلي", e)
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        unregisterWebView()
+    }
+}
 }
