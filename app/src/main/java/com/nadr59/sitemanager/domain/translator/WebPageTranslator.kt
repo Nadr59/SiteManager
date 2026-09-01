@@ -1,108 +1,155 @@
 package com.nadr59.sitemanager.domain.translator
 
-import com.google.gson.Gson
-import com.google.gson.JsonObject
 import com.nadr59.sitemanager.data.model.PageTextNode
 import com.nadr59.sitemanager.data.model.TranslatedNode
+import org.json.JSONArray
+import org.json.JSONObject
+import org.json.JSONTokener
 
+/** Builds safe JavaScript and parses WebView evaluateJavascript results. */
 class WebPageTranslator {
 
-    private val gson = Gson()
+    fun buildExtractScript(): String = """
+        (function() {
+            try {
+                const selector = 'h1,h2,h3,h4,h5,h6,p,li,span,a,td,th,button,label,option,blockquote,figcaption,summary';
+                const elements = document.querySelectorAll(selector);
+                const result = [];
+                let index = 0;
 
-    fun buildExtractScript(): String {
+                elements.forEach(function(element) {
+                    if (!element || element.children.length > 0) return;
+                    if (element.offsetParent === null) return;
+                    if (element.closest('script,style,noscript,template')) return;
+
+                    const text = (element.innerText || element.textContent || '').trim();
+                    if (text.length < 2) return;
+                    if (element.getAttribute('data-ai-translate-id')) return;
+
+                    const id = 'ai_node_' + index++;
+                    element.setAttribute('data-ai-translate-id', id);
+                    result.push({ id: id, text: text });
+                });
+
+                return JSON.stringify(result);
+            } catch (e) {
+                return JSON.stringify([]);
+            }
+        })();
+    """.trimIndent()
+
+    fun buildReplaceScript(translations: List<TranslatedNode>): String {
+        val json = JSONArray().apply {
+            translations.forEach { node ->
+                put(JSONObject().apply {
+                    put("id", node.id)
+                    put("text", node.translatedText)
+                })
+            }
+        }
+
+        // JSON.stringify gives correct JS escaping for quotes, newlines, backslashes,
+        // Unicode separators, etc. No hand-written JS string escaping is needed.
+        val payload = JSONObject.quote(json.toString())
         return """
             (function() {
                 try {
-                    var nodes = [];
-                    var counter = 0;
-                    var selectors = 'h1,h2,h3,h4,h5,h6,p,li,span,a,td,th,button,label,option,blockquote,figcaption,summary';
-                    var elements = document.querySelectorAll(selectors);
-                    elements.forEach(function(el) {
-                        if (el.children.length === 0) {
-                            var text = el.innerText.trim();
-                            if (text.length > 0) {
-                                var id = 'ai_node_' + counter;
-                                el.setAttribute('data-ai-translate-id', id);
-                                nodes.push({ id: id, text: text });
-                                counter++;
-                            }
-                        }
+                    const items = JSON.parse($payload);
+                    items.forEach(function(item) {
+                        const selector = '[data-ai-translate-id="' + item.id + '"]';
+                        const el = document.querySelector(selector);
+                        if (!el) return;
+                        el.textContent = item.text;
+                        el.style.direction = 'rtl';
+                        el.style.textAlign = 'right';
                     });
-                    return JSON.stringify(nodes);
-                } catch(e) {
-                    return '[]';
+                    document.documentElement.setAttribute('data-ai-translated', 'true');
+                } catch (e) {}
+                return 'ok';
+            })();
+        """.trimIndent()
+    }
+
+    fun buildSelectionScript(): String = """
+        (function() {
+            try {
+                const selection = window.getSelection();
+                const text = selection ? selection.toString().trim() : '';
+                return JSON.stringify({ text: text });
+            } catch (e) {
+                return JSON.stringify({ text: '' });
+            }
+        })();
+    """.trimIndent()
+
+    fun buildReplaceSelectionScript(translatedText: String): String {
+        val payload = JSONObject.quote(translatedText)
+        return """
+            (function() {
+                try {
+                    const selection = window.getSelection();
+                    if (!selection || selection.rangeCount === 0) return 'no-selection';
+                    const range = selection.getRangeAt(0);
+                    range.deleteContents();
+                    const wrapper = document.createElement('span');
+                    wrapper.textContent = $payload;
+                    wrapper.style.direction = 'rtl';
+                    wrapper.style.textAlign = 'right';
+                    wrapper.style.backgroundColor = '#FFF9C4';
+                    wrapper.style.padding = '2px 4px';
+                    wrapper.style.borderRadius = '3px';
+                    range.insertNode(wrapper);
+                    selection.removeAllRanges();
+                    return 'ok';
+                } catch (e) {
+                    return 'error';
                 }
             })();
         """.trimIndent()
     }
 
-    fun parseExtractedNodes(jsonResult: String): List<PageTextNode> {
+    /** Decodes the JSON-string result returned by WebView.evaluateJavascript. */
+    fun decodeJavascriptResult(rawResult: String?): String? {
+        if (rawResult.isNullOrBlank() || rawResult == "null") return null
         return try {
-            val cleanJson = jsonResult.trim('"').replace("\\\"", "\"")
-            val nodesArray = gson.fromJson(cleanJson, Array<JsonObject>::class.java)
-            nodesArray.map { obj ->
-                PageTextNode(
-                    id = obj.get("id")?.asString ?: "",
-                    text = obj.get("text")?.asString ?: ""
-                )
-            }.filter { it.text.isNotBlank() }
-        } catch (e: Exception) {
+            val decoded = JSONTokener(rawResult).nextValue()
+            when (decoded) {
+                is String -> decoded
+                null -> null
+                else -> decoded.toString()
+            }
+        } catch (_: Exception) {
+            // Some WebView versions/plugins may return an already-decoded value.
+            rawResult
+        }
+    }
+
+    fun parseExtractedNodes(value: String?): List<PageTextNode> {
+        if (value.isNullOrBlank()) return emptyList()
+        return try {
+            val arr = JSONArray(value)
+            buildList(arr.length()) {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val id = obj.optString("id")
+                    val text = obj.optString("text").trim()
+                    if (id.isNotBlank() && text.isNotBlank()) {
+                        add(PageTextNode(id = id, text = text))
+                    }
+                }
+            }
+        } catch (_: Exception) {
             emptyList()
         }
     }
 
-    fun buildReplaceScript(translations: List<TranslatedNode>): String {
-        val replacements = translations.joinToString(",\n") { node ->
-            val escapedText = node.translatedText
-                .replace("\\", "\\\\")
-                .replace("'", "\\'")
-                .replace("\n", "\\n")
-                .replace("\"", "\\\"")
-            "{ id: '${node.id}', text: '$escapedText' }"
-        }
-
-        return """
-            (function() {
-                try {
-                    var translations = [$replacements];
-                    translations.forEach(function(t) {
-                        var el = document.querySelector('[data-ai-translate-id="' + t.id + '"]');
-                        if (el) {
-                            el.innerText = t.text;
-                            el.style.direction = 'rtl';
-                            el.style.textAlign = 'right';
-                        }
-                    });
-                    return true;
-                } catch(e) {
-                    console.error('Translation error:', e);
-                    return false;
-                }
-            })();
-        """.trimIndent()
-    }
-
-    fun buildSelectionScript(): String {
-        return """
-            (function() {
-                try {
-                    var selection = window.getSelection();
-                    var text = selection.toString().trim();
-                    return JSON.stringify({ text: text, rangeCount: selection.rangeCount });
-                } catch(e) {
-                    return JSON.stringify({ text: '', rangeCount: 0 });
-                }
-            })();
-        """.trimIndent()
-    }
-
-    fun parseSelectionJson(jsonResult: String): String {
+    fun parseSelectionText(value: String?): String? {
+        if (value.isNullOrBlank()) return null
         return try {
-            val cleanJson = jsonResult.trim('"').replace("\\\"", "\"")
-            val json = gson.fromJson(cleanJson, JsonObject::class.java)
-            json.get("text")?.asString ?: ""
-        } catch (e: Exception) {
-            ""
+            val obj = JSONObject(value)
+            obj.optString("text").trim().ifBlank { null }
+        } catch (_: Exception) {
+            null
         }
     }
 }
