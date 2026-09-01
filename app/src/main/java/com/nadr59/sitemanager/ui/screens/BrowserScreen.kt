@@ -141,21 +141,7 @@ fun BrowserScreen(
         if (script != null && webView != null) {
             webView?.evaluateJavascript(script) { result ->
                 viewModel.onJsExecuted()
-                if (result != null && result != "null" && result.isNotBlank()) {
-                    val cleanResult = result
-                        .removePrefix("\"")
-                        .removeSuffix("\"")
-                        .replace("\\\"", "\"")
-                        .replace("\\\\", "\\")
-                    when {
-                        cleanResult.trimStart().startsWith("[") -> {
-                            viewModel.onNodesExtracted(result)
-                        }
-                        cleanResult.contains("\"text\"") -> {
-                            viewModel.onTextSelected(result)
-                        }
-                    }
-                }
+                viewModel.onJavascriptResult(result)
             }
         }
     }
@@ -452,6 +438,7 @@ fun BrowserScreen(
                                     favicon: android.graphics.Bitmap?
                                 ) {
                                     viewModel.setLoading(true)
+                                    if (!url.isNullOrBlank()) viewModel.loadUrl(url)
                                 }
 
                                 override fun onPageFinished(
@@ -459,6 +446,7 @@ fun BrowserScreen(
                                     url: String?
                                 ) {
                                     viewModel.setLoading(false)
+                                    if (!url.isNullOrBlank()) viewModel.loadUrl(url)
                                     viewModel.updateNavigation(canGoBack(), canGoForward())
                                     viewModel.saveToHistory()
                                 }
@@ -1258,3 +1246,6 @@ fun ScreenshotDialog(
         }
     }
 }
+
+
+ 
