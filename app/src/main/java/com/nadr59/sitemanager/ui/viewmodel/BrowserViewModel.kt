@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
@@ -185,7 +184,6 @@ class BrowserViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                // جلب محتوى الصفحة
                 val content = webScraper.scrape(url)
                 currentPageContent = content.rawContent
 
@@ -231,13 +229,11 @@ ${content.rawContent.take(3000)}
         val url = _uiState.value.url
         val title = _uiState.value.title
 
-        // إضافة رسالة المستخدم
         _aiMessages.update { it + AiMessage(text = question, isUser = true) }
         _isAiThinking.value = true
 
         viewModelScope.launch {
             try {
-                // جلب المحتوى إذا لم يكن محملاً
                 if (currentPageContent.isBlank()) {
                     try {
                         val content = webScraper.scrape(url)
@@ -390,12 +386,8 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     private fun buildEnhancedReaderModeScript(): String {
         return """
         (function() {
-            // ═══ إزالة العناصر الزائدة ═══
             var removeSelectors = [
-                'header:not(article header)',
-                'footer',
-                'nav',
-                'aside',
+                'header:not(article header)', 'footer', 'nav', 'aside',
                 '.ad', '.ads', '.advertisement', '.banner',
                 '.sidebar', '.widget', '.popup', '.modal',
                 '.cookie-notice', '.newsletter-signup',
@@ -406,17 +398,11 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                 '.comments', '#comments',
                 '.sticky', '[class*="sticky"]'
             ];
-            
             removeSelectors.forEach(function(s) {
-                try {
-                    document.querySelectorAll(s).forEach(function(el) {
-                        el.remove();
-                    });
-                } catch(e) {}
+                try { document.querySelectorAll(s).forEach(function(el) { el.remove(); }); } catch(e) {}
             });
 
-            // ═══ استخراج المحتوى الرئيسي ═══
-            var mainContent = 
+            var mainContent =
                 document.querySelector('article') ||
                 document.querySelector('main') ||
                 document.querySelector('[role="main"]') ||
@@ -425,125 +411,49 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                 document.querySelector('.entry-content') ||
                 document.body;
 
-            // ═══ إنشاء حاوية القراءة ═══
             var readerContainer = document.createElement('div');
             readerContainer.id = 'reader-mode-container';
             readerContainer.innerHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
 
-            // ═══ تطبيق الستايل ═══
             document.body.innerHTML = '';
             document.body.appendChild(readerContainer);
 
             var style = document.createElement('style');
             style.textContent = `
                 * { box-sizing: border-box; }
-                
-                body {
-                    background: #FAFAFA !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                }
-                
+                body { background: #FAFAFA !important; margin: 0 !important; padding: 0 !important; }
                 #reader-mode-container {
-                    max-width: 720px !important;
-                    margin: 0 auto !important;
+                    max-width: 720px !important; margin: 0 auto !important;
                     padding: 24px 20px 48px !important;
-                    font-family: 'Georgia', 'Times New Roman', serif !important;
-                    font-size: 19px !important;
-                    line-height: 1.9 !important;
-                    color: #2C2C2C !important;
+                    font-family: 'Georgia', serif !important; font-size: 19px !important;
+                    line-height: 1.9 !important; color: #2C2C2C !important;
                     background: #FAFAFA !important;
                 }
-                
-                #reader-mode-container h1,
-                #reader-mode-container h2,
-                #reader-mode-container h3,
-                #reader-mode-container h4 {
-                    font-family: sans-serif !important;
-                    color: #1A1A1A !important;
-                    margin-top: 1.5em !important;
-                    line-height: 1.4 !important;
+                #reader-mode-container h1, #reader-mode-container h2, #reader-mode-container h3 {
+                    font-family: sans-serif !important; color: #1A1A1A !important;
+                    margin-top: 1.5em !important; line-height: 1.4 !important;
                 }
-                
                 #reader-mode-container h1 { font-size: 28px !important; }
                 #reader-mode-container h2 { font-size: 23px !important; }
-                #reader-mode-container h3 { font-size: 19px !important; }
-                
-                #reader-mode-container p {
-                    margin-bottom: 1.2em !important;
-                    text-align: justify !important;
-                }
-                
+                #reader-mode-container p { margin-bottom: 1.2em !important; }
                 #reader-mode-container img {
-                    max-width: 100% !important;
-                    height: auto !important;
-                    border-radius: 8px !important;
-                    margin: 16px 0 !important;
-                    display: block !important;
+                    max-width: 100% !important; height: auto !important;
+                    border-radius: 8px !important; margin: 16px 0 !important;
                 }
-                
-                #reader-mode-container a {
-                    color: #1565C0 !important;
-                    text-decoration: underline !important;
-                }
-                
+                #reader-mode-container a { color: #1565C0 !important; text-decoration: underline !important; }
                 #reader-mode-container blockquote {
-                    border-right: 4px solid #1565C0 !important;
-                    border-left: none !important;
-                    padding: 8px 16px !important;
-                    margin: 16px 0 !important;
-                    background: #F0F4FF !important;
-                    border-radius: 0 8px 8px 0 !important;
-                    font-style: italic !important;
+                    border-right: 4px solid #1565C0 !important; border-left: none !important;
+                    padding: 8px 16px !important; margin: 16px 0 !important;
+                    background: #F0F4FF !important; border-radius: 0 8px 8px 0 !important;
                 }
-                
-                #reader-mode-container pre,
-                #reader-mode-container code {
-                    background: #F5F5F5 !important;
-                    border-radius: 4px !important;
-                    padding: 2px 6px !important;
-                    font-family: monospace !important;
-                    font-size: 16px !important;
+                #reader-mode-container pre, #reader-mode-container code {
+                    background: #F5F5F5 !important; border-radius: 4px !important;
+                    padding: 2px 6px !important; font-family: monospace !important;
                 }
-                
-                #reader-mode-container pre {
-                    padding: 16px !important;
-                    overflow-x: auto !important;
-                    margin: 16px 0 !important;
-                }
-                
-                #reader-mode-container ul,
-                #reader-mode-container ol {
-                    padding-right: 24px !important;
-                    padding-left: 0 !important;
-                }
-                
-                #reader-mode-container li {
-                    margin-bottom: 8px !important;
-                }
-                
-                #reader-mode-container table {
-                    width: 100% !important;
-                    border-collapse: collapse !important;
-                    margin: 16px 0 !important;
-                }
-                
-                #reader-mode-container td,
-                #reader-mode-container th {
-                    border: 1px solid #DDD !important;
-                    padding: 8px 12px !important;
-                }
-                
-                #reader-mode-container th {
-                    background: #F0F0F0 !important;
-                    font-weight: bold !important;
-                }
+                #reader-mode-container pre { padding: 16px !important; overflow-x: auto !important; }
             `;
             document.head.appendChild(style);
-
-            // ═══ ضبط الاتجاه ═══
             document.documentElement.setAttribute('dir', 'auto');
-            
             return 'reader_mode_enabled';
         })();
         """.trimIndent()
@@ -554,7 +464,14 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     // ═══════════════════════════════════════
     fun startPageTranslation() {
         if (_uiState.value.url.isBlank() || _uiState.value.isTranslating) return
-        _uiState.update { it.copy(isTranslating = true, translationProgress = 0f, error = null, showTranslationSheet = false) }
+        _uiState.update {
+            it.copy(
+                isTranslating = true,
+                translationProgress = 0f,
+                error = null,
+                showTranslationSheet = false
+            )
+        }
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
         _pendingJs.value = translationCoordinator.extractScript()
@@ -568,16 +485,20 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         }
     }
 
-    // Compatibility methods for existing callers.
     fun onNodesExtracted(jsonString: String) {
         val result = translationCoordinator.decodeAndClassify(jsonString)
         if (result is JavascriptResult.Nodes) handleExtractedNodes(result.nodes)
     }
 
-    private fun handleExtractedNodes(nodes: List<PageTextNode>) {
-        _extractedNodes.value = nodes
+    private fun handle.value = nodes
         if (nodes.isEmpty()) {
-            _uiState.update { it.copy(isTranslating = false, translationProgress = 0f, error = "لم يتم العثور على نص قابل للترجمة في الصفحة") }
+            _uiState.update {
+                it.copy(
+                    isTranslating = false,
+                    translationProgress = 0f,
+                    error = "لم يتم العثور على نص قابل للترجمة في الصفحة"
+                )
+            }
             return
         }
 
@@ -593,10 +514,23 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                 onSuccess = { translated ->
                     _translatedNodes.value = translated
                     _pendingJs.value = translationCoordinator.replaceScript(translated)
-                    _uiState.update { it.copy(isTranslating = false, isTranslationMode = true, translationProgress = 1f) }
+                    _uiState.update {
+                        it.copy(
+                            isTranslating = false,
+                            isTranslationMode = true,
+                            translationProgress = 1f
+ExtractedNodes(nodes: List<PageTextNode>) {
+        _extractedNodes                        )
+                    }
                 },
                 onFailure = { error ->
-                    _uiState.update { it.copy(isTranslating = false, translationProgress = 0f, error = "فشل ترجمة الصفحة: ${error.message ?: "خطأ غير معروف"}") }
+                    _uiState.update {
+                        it.copy(
+                            isTranslating = false,
+                            translationProgress = 0f,
+                            error = "فشل ترجمة الصفحة: ${error.message ?: "خطأ غير معروف"}"
+                        )
+                    }
                 }
             )
         }
@@ -612,22 +546,39 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         if (result is JavascriptResult.Selection) handleSelectedText(result.text)
     }
 
+    // ═══════════════════════════════════════
+    // هنا كان القوس مفقود!
+    // ═══════════════════════════════════════
     private fun handleSelectedText(text: String) {
         viewModelScope.launch {
-            val result = translationCoordinator.translateSelection(text, _uiState.value.targetLanguage)
+            val result = translationCoordinator.translateSelection(
+                text,
+                _uiState.value.targetLanguage
+            )
             result.fold(
                 onSuccess = { translated ->
                     _pendingJs.value = translationCoordinator.replaceSelectionScript(translated)
                 },
                 onFailure = { error ->
-                    _uiState.update { it.copy(error = "فشل ترجمة النص المحدد: ${error.message ?: "خطأ غير معروف"}") }
+                    _uiState.update {
+                        it.copy(
+                            error = "فشل ترجمة النص المحدد: ${error.message ?: "خطأ غير معروف"}"
+                        )
+                    }
                 }
             )
         }
-     
+    } // ← هذا القوس كان مفقود!
 
     fun resetTranslation() {
-        _uiState.update { it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f, error = null) }
+        _uiState.update {
+            it.copy(
+                isTranslationMode = false,
+                isTranslating = false,
+                translationProgress = 0f,
+                error = null
+            )
+        }
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
         _pendingJs.value = "window.location.reload();"
