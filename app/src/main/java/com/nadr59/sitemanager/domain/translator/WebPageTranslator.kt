@@ -145,4 +145,17 @@ class WebPageTranslator {
             emptyList()
         }
     }
+    // ⭐ أضف هذه الدالة الجديدة
+    fun parseSelectionJson(jsonResult: String): String {
+        return try {
+            val json = com.google.gson.Gson().fromJson(
+                jsonResult, 
+                com.google.gson.JsonObject::class.java
+            )
+            json.get("text")?.asString ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+    }
+}
 }
