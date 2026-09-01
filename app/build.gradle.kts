@@ -1,3 +1,5 @@
+// app/build.gradle.kts
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -33,18 +35,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // ✅ kotlinOptions مرة واحدة فقط مع كل الخيارات
     kotlinOptions {
         jvmTarget = "17"
-    }
-
-    buildFeatures {
-        compose = true
-    }
-kotlinOptions {
         freeCompilerArgs += listOf(
             "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
         )
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true  // ✅ مطلوب لـ BuildConfig في SiteManagerApp
     }
 }
 
@@ -53,7 +55,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.3")
 
-    // Compose
+    // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -87,11 +89,13 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-// Markdown renderer
-    implementation("com.github.jeziellago:compose-markdown:0.5.4")
-// Coil للصور
-implementation("io.coil-kt:coil-compose:2.7.0")
-// Logging
-    implementation("com.jakewharton.timber:timber:5.0.1")
 
+    // Markdown
+    implementation("com.github.jeziellago:compose-markdown:0.5.4")
+
+    // Coil
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Logging
+    implementation("com.jakewharton.timber:timber:5.0.1")
 }
