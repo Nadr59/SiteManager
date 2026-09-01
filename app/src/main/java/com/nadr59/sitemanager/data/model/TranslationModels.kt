@@ -18,3 +18,5 @@ data class TranslationResult(
     val success: Boolean,
     val error: String? = null
 )
+
+
