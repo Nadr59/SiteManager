@@ -12,7 +12,7 @@ class SiteManagerApp : Application() {
         super.onCreate()
         
         // تفعيل Timber للـ Debug فقط
-        if (BuildConfig.DEBUG) {
+        if (com.nadr59.sitemanager.BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
     }
