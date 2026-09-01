@@ -29,51 +29,42 @@ class BrowserViewModel @Inject constructor(
     private val translationCoordinator: WebPageTranslationCoordinator
 ) : ViewModel() {
 
-    // الخدمات القديمة (نبقيها للتوافق)
     private val pageTranslator = WebPageTranslator()
     private val apiClient = ApiClient()
     private val webScraper = WebScraper()
 
-    // WebView reference
     private var currentWebView: WebView? = null
 
-    // حالة UI
     private val _uiState = MutableStateFlow(BrowserState())
     val uiState: StateFlow<BrowserState> = _uiState.asStateFlow()
 
-    // JavaScript معلق
     private val _pendingJs = MutableStateFlow<String?>(null)
     val pendingJs: StateFlow<String?> = _pendingJs.asStateFlow()
 
-    // ملاحظات الصفحة
     private val _pageNotes = MutableStateFlow<List<PageNote>>(emptyList())
     val pageNotes: StateFlow<List<PageNote>> = _pageNotes.asStateFlow()
 
-    // ملخص الصفحة
     private val _pageSummary = MutableStateFlow<String?>(null)
     val pageSummary: StateFlow<String?> = _pageSummary.asStateFlow()
 
-    // محادثة AI
     private val _aiMessages = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val aiMessages: StateFlow<List<Pair<String, String>>> = _aiMessages.asStateFlow()
 
-    // لقطة الشاشة
     private val _screenshot = MutableStateFlow<android.graphics.Bitmap?>(null)
     val screenshot: StateFlow<android.graphics.Bitmap?> = _screenshot.asStateFlow()
 
-    // History
     private val _history = MutableStateFlow<List<BrowserHistory>>(emptyList())
     val history: StateFlow<List<BrowserHistory>> = _history.asStateFlow()
 
-    // Bookmarks
+    // alias for BrowserScreen compatibility
+    val browserHistory: StateFlow<List<BrowserHistory>> = _history.asStateFlow()
+
     private val _bookmarks = MutableStateFlow<List<BrowserBookmark>>(emptyList())
     val bookmarks: StateFlow<List<BrowserBookmark>> = _bookmarks.asStateFlow()
 
-    // Reader Mode
     private val _readerModeContent = MutableStateFlow<String?>(null)
     val readerModeContent: StateFlow<String?> = _readerModeContent.asStateFlow()
 
-    // معرف الموقع الحالي
     private var currentSiteId: Int? = null
 
     init {
@@ -81,7 +72,7 @@ class BrowserViewModel @Inject constructor(
         loadBookmarks()
     }
 
-    // ==================== WebView Management ====================
+    // ==================== WebView ====================
 
     fun registerWebView(webView: WebView) {
         currentWebView = webView
@@ -93,15 +84,13 @@ class BrowserViewModel @Inject constructor(
         Timber.d("تم إلغاء تسجيل WebView")
     }
 
-    // ==================== Site Loading ====================
+    // ==================== Site ====================
 
     fun loadSite(siteId: Int) {
         currentSiteId = siteId
-
         viewModelScope.launch {
             try {
                 val site = siteRepository.getSiteById(siteId)
-
                 if (site != null) {
                     _uiState.update { it.copy(url = site.url, title = site.name) }
                     siteRepository.incrementVisitCount(siteId)
@@ -113,11 +102,58 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
+    // ==================== UI State ====================
+
+    fun updateUrl(url: String) {
+        _uiState.update { it.copy(url = url) }
+    }
+
+    fun updateTitle(title: String) {
+        _uiState.update { it.copy(title = title) }
+    }
+
+    fun updateLoadingState(isLoading: Boolean) {
+        _uiState.update { it.copy(isLoading = isLoading) }
+    }
+
+    fun updateProgress(progress: Int) {
+        _uiState.update { it.copy(progress = progress) }
+    }
+
+    fun updateNavigationState(canGoBack: Boolean, canGoForward: Boolean) {
+        _uiState.update { it.copy(canGoBack = canGoBack, canGoForward = canGoForward) }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    fun consumePendingJs() {
+        _pendingJs.value = null
+    }
+
+    fun onJsExecuted() {
+        consumePendingJs()
+    }
+
+    // ==================== Translation Sheet ====================
+
+    fun showTranslationSheet() {
+        _uiState.update { it.copy(showTranslationSheet = true) }
+    }
+
+    fun hideTranslationSheet() {
+        _uiState.update { it.copy(showTranslationSheet = false) }
+    }
+
+    fun setTargetLanguage(language: String) {
+        _uiState.update { it.copy(targetLanguage = language) }
+    }
+
     // ==================== Translation ====================
 
     fun startPageTranslationWithCoordinator() {
-        val webView = currentWebView
-        if (webView == null) {
+        val webView = currentWebView ?: run {
             Timber.e("WebView غير مسجل")
             _uiState.update { it.copy(error = "خطأ داخلي: WebView غير متوفر") }
             return
@@ -148,11 +184,8 @@ class BrowserViewModel @Inject constructor(
                         when (operation) {
                             is TranslationOperation.Progress -> {
                                 _uiState.update {
-                                    it.copy(
-                                        translationProgress = operation.percentage / 100f
-                                    )
+                                    it.copy(translationProgress = operation.percentage / 100f)
                                 }
-                                Timber.d("تقدم الترجمة: ${operation.current}/${operation.total}")
                             }
                             is TranslationOperation.Success -> {
                                 _uiState.update {
@@ -163,7 +196,6 @@ class BrowserViewModel @Inject constructor(
                                         error = null
                                     )
                                 }
-                                Timber.d("نجحت الترجمة: ${operation.state.translatedCount} عقدة")
                             }
                             is TranslationOperation.Failure -> {
                                 _uiState.update {
@@ -172,7 +204,6 @@ class BrowserViewModel @Inject constructor(
                                         error = operation.error
                                     )
                                 }
-                                Timber.e("فشلت الترجمة: ${operation.error}")
                             }
                         }
                     }
@@ -190,8 +221,7 @@ class BrowserViewModel @Inject constructor(
     }
 
     fun translateSelectionWithCoordinator() {
-        val webView = currentWebView
-        if (webView == null) {
+        val webView = currentWebView ?: run {
             Timber.e("WebView غير مسجل")
             return
         }
@@ -204,31 +234,20 @@ class BrowserViewModel @Inject constructor(
                     webView = webView,
                     targetLanguage = _uiState.value.targetLanguage
                 )
-
                 if (result.isSuccess) {
                     val (original, translated) = result.getOrThrow()
-                    Timber.d("تمت ترجمة النص المحدد: ${original.take(30)}... -> ${translated.take(30)}...")
-                } else {
-                    Timber.e("فشل في ترجمة النص المحدد")
+                    Timber.d("ترجمة النص: ${original.take(30)} -> ${translated.take(30)}")
                 }
-
                 _uiState.update { it.copy(isTranslating = false) }
-
             } catch (e: Exception) {
                 Timber.e(e, "خطأ في ترجمة النص المحدد")
-                _uiState.update {
-                    it.copy(
-                        isTranslating = false,
-                        error = e.message
-                    )
-                }
+                _uiState.update { it.copy(isTranslating = false, error = e.message) }
             }
         }
     }
 
     fun restoreOriginalWithCoordinator() {
-        val webView = currentWebView
-        if (webView == null) {
+        val webView = currentWebView ?: run {
             Timber.e("WebView غير مسجل")
             return
         }
@@ -238,71 +257,154 @@ class BrowserViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                translationCoordinator.restoreOriginalPage(
-                    webView = webView,
-                    url = currentUrl
-                ).onSuccess {
-                    _uiState.update {
-                        it.copy(
-                            isTranslationMode = false,
-                            translationProgress = 0f
-                        )
+                translationCoordinator.restoreOriginalPage(webView, currentUrl)
+                    .onSuccess {
+                        _uiState.update {
+                            it.copy(isTranslationMode = false, translationProgress = 0f)
+                        }
                     }
-                    Timber.d("تمت استعادة النص الأصلي")
-                }.onFailure { e ->
-                    Timber.e(e, "فشل في استعادة النص الأصلي")
-                }
+                    .onFailure { e ->
+                        Timber.e(e, "فشل في استعادة النص الأصلي")
+                    }
             } catch (e: Exception) {
                 Timber.e(e, "خطأ في استعادة النص الأصلي")
             }
         }
     }
 
-    // دوال للتوافق مع الكود القديم
+    // دوال للتوافق
     fun startPageTranslation() = startPageTranslationWithCoordinator()
     fun translateSelectedText() = translateSelectionWithCoordinator()
     fun resetTranslation() = restoreOriginalWithCoordinator()
 
-    // ==================== UI State Updates ====================
+    // ==================== Bookmark ====================
 
-    fun updateUrl(url: String) {
-        _uiState.update { it.copy(url = url) }
+    fun toggleBookmark() {
+        val currentUrl = _uiState.value.url
+        val currentTitle = _uiState.value.title
+        val isBookmarked = _uiState.value.isBookmarked
+
+        if (isBookmarked) {
+            viewModelScope.launch {
+                val bookmark = _bookmarks.value.find { it.url == currentUrl }
+                if (bookmark != null) {
+                    translationRepository.deleteBookmark(bookmark)
+                    _uiState.update { it.copy(isBookmarked = false) }
+                }
+            }
+        } else {
+            addBookmark(currentUrl, currentTitle)
+            _uiState.update { it.copy(isBookmarked = true) }
+        }
     }
 
-    fun updateTitle(title: String) {
-        _uiState.update { it.copy(title = title) }
+    // ==================== Reader Mode ====================
+
+    fun toggleReaderMode() {
+        if (_uiState.value.isReaderMode) {
+            disableReaderMode()
+        } else {
+            enableReaderMode()
+        }
     }
 
-    fun updateLoadingState(isLoading: Boolean) {
-        _uiState.update { it.copy(isLoading = isLoading) }
+    fun enableReaderMode() {
+        viewModelScope.launch {
+            try {
+                val url = _uiState.value.url
+                val content = webScraper.scrapeWebsite(url)
+                _readerModeContent.value = content
+                _uiState.update { it.copy(isReaderMode = true) }
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في تفعيل وضع القراءة")
+            }
+        }
     }
 
-    fun updateProgress(progress: Int) {
-        _uiState.update { it.copy(progress = progress) }
+    fun disableReaderMode() {
+        _readerModeContent.value = null
+        _uiState.update { it.copy(isReaderMode = false) }
     }
 
-    fun updateNavigationState(canGoBack: Boolean, canGoForward: Boolean) {
-        _uiState.update { it.copy(canGoBack = canGoBack, canGoForward = canGoForward) }
+    // ==================== Screenshot ====================
+
+    fun takeScreenshot() {
+        val webView = currentWebView ?: return
+        try {
+            val bitmap = android.graphics.Bitmap.createBitmap(
+                webView.width, webView.height,
+                android.graphics.Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bitmap)
+            webView.draw(canvas)
+            _screenshot.value = bitmap
+            Timber.d("تم التقاط الشاشة")
+        } catch (e: Exception) {
+            Timber.e(e, "فشل في التقاط الشاشة")
+        }
     }
 
-    fun showTranslationSheet() {
-        _uiState.update { it.copy(showTranslationSheet = true) }
+    fun captureScreenshot(bitmap: android.graphics.Bitmap) {
+        _screenshot.value = bitmap
     }
 
-    fun hideTranslationSheet() {
-        _uiState.update { it.copy(showTranslationSheet = false) }
+    fun clearScreenshot() {
+        _screenshot.value = null
     }
 
-    fun setTargetLanguage(language: String) {
-        _uiState.update { it.copy(targetLanguage = language) }
+    // ==================== AI / Summary ====================
+
+    fun summarizePage() {
+        _uiState.update { it.copy(isSummarizing = true) }
+        viewModelScope.launch {
+            try {
+                val url = _uiState.value.url
+                val content = webScraper.scrapeWebsite(url)
+                val prompt = """
+                    لخص هذه الصفحة بشكل مختصر ومفيد:
+                    ${content.take(3000)}
+                """.trimIndent()
+                val summary = apiClient.sendPrompt(prompt)
+                _pageSummary.value = summary
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في تلخيص الصفحة")
+                _uiState.update { it.copy(error = "فشل في تلخيص الصفحة") }
+            } finally {
+                _uiState.update { it.copy(isSummarizing = false) }
+            }
+        }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
+    fun askAI(question: String) {
+        _uiState.update { it.copy(isAiThinking = true) }
+        viewModelScope.launch {
+            try {
+                val url = _uiState.value.url
+                val content = webScraper.scrapeWebsite(url)
+                val prompt = """
+                    بناءً على محتوى هذه الصفحة:
+                    ${content.take(2000)}
+                    
+                    السؤال: $question
+                """.trimIndent()
+                val answer = apiClient.sendPrompt(prompt)
+                _aiMessages.value = _aiMessages.value + (question to answer)
+            } catch (e: Exception) {
+                Timber.e(e, "فشل في الحصول على إجابة AI")
+            } finally {
+                _uiState.update { it.copy(isAiThinking = false) }
+            }
+        }
     }
 
-    fun consumePendingJs() {
-        _pendingJs.value = null
+    // ==================== Nodes / Selection Callbacks ====================
+
+    fun onNodesExtracted(nodesJson: String) {
+        Timber.d("تم استخراج العقد: ${nodesJson.take(100)}")
+    }
+
+    fun onTextSelected(selectedText: String) {
+        Timber.d("تم تحديد النص: ${selectedText.take(50)}")
     }
 
     // ==================== History ====================
@@ -318,13 +420,13 @@ class BrowserViewModel @Inject constructor(
     fun addToHistory(url: String, title: String) {
         viewModelScope.launch {
             try {
-                val history = BrowserHistory(
+                val historyItem = BrowserHistory(
                     url = url,
                     title = title,
                     visitedAt = System.currentTimeMillis(),
                     siteId = currentSiteId
                 )
-                translationRepository.insertHistory(history)
+                translationRepository.insertHistory(historyItem)
             } catch (e: Exception) {
                 Timber.e(e, "فشل في إضافة التاريخ")
             }
@@ -349,6 +451,12 @@ class BrowserViewModel @Inject constructor(
         viewModelScope.launch {
             translationRepository.getAllBookmarks().collect { bookmarkList ->
                 _bookmarks.value = bookmarkList
+                val currentUrl = _uiState.value.url
+                if (currentUrl.isNotBlank()) {
+                    _uiState.update {
+                        it.copy(isBookmarked = bookmarkList.any { b -> b.url == currentUrl })
+                    }
+                }
             }
         }
     }
@@ -381,6 +489,7 @@ class BrowserViewModel @Inject constructor(
         viewModelScope.launch {
             translationRepository.getPageNotes(url).collect { notes ->
                 _pageNotes.value = notes
+                _uiState.update { it.copy(hasNotes = notes.isNotEmpty()) }
             }
         }
     }
@@ -406,80 +515,6 @@ class BrowserViewModel @Inject constructor(
         viewModelScope.launch {
             translationRepository.deletePageNote(note)
         }
-    }
-
-    // ==================== AI Features ====================
-
-    fun summarizePage() {
-        viewModelScope.launch {
-            try {
-                val url = _uiState.value.url
-                val content = webScraper.scrapeWebsite(url)
-
-                val prompt = """
-                    لخص هذه الصفحة بشكل مختصر ومفيد:
-                    
-                    ${content.take(3000)}
-                """.trimIndent()
-
-                val summary = apiClient.sendPrompt(prompt)
-                _pageSummary.value = summary
-
-            } catch (e: Exception) {
-                Timber.e(e, "فشل في تلخيص الصفحة")
-                _uiState.update { it.copy(error = "فشل في تلخيص الصفحة") }
-            }
-        }
-    }
-
-    fun askAI(question: String) {
-        viewModelScope.launch {
-            try {
-                val url = _uiState.value.url
-                val content = webScraper.scrapeWebsite(url)
-
-                val prompt = """
-                    بناءً على محتوى هذه الصفحة:
-                    ${content.take(2000)}
-                    
-                    السؤال: $question
-                """.trimIndent()
-
-                val answer = apiClient.sendPrompt(prompt)
-                _aiMessages.value = _aiMessages.value + (question to answer)
-
-            } catch (e: Exception) {
-                Timber.e(e, "فشل في الحصول على إجابة AI")
-            }
-        }
-    }
-
-    // ==================== Reader Mode ====================
-
-    fun enableReaderMode() {
-        viewModelScope.launch {
-            try {
-                val url = _uiState.value.url
-                val content = webScraper.scrapeWebsite(url)
-                _readerModeContent.value = content
-            } catch (e: Exception) {
-                Timber.e(e, "فشل في تفعيل وضع القراءة")
-            }
-        }
-    }
-
-    fun disableReaderMode() {
-        _readerModeContent.value = null
-    }
-
-    // ==================== Screenshot ====================
-
-    fun captureScreenshot(bitmap: android.graphics.Bitmap) {
-        _screenshot.value = bitmap
-    }
-
-    fun clearScreenshot() {
-        _screenshot.value = null
     }
 
     // ==================== Lifecycle ====================
