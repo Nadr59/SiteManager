@@ -624,7 +624,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                 }
             )
         }
-    }
+     
 
     fun resetTranslation() {
         _uiState.update { it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f, error = null) }
@@ -632,51 +632,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         _translatedNodes.value = emptyList()
         _pendingJs.value = "window.location.reload();"
     }
-package com.nadr59.sitemanager.data.model
 
-data class PageTextNode(
-    val id: String,
-    val text: String
-)
-
-data class TranslatedNode(
-    val id: String,
-    val originalText: String,
-    val translatedText: String
-)
-
-data class TranslationResult(
-    val nodes: List<TranslatedNode>,
-    val sourceLanguage: String,
-    val targetLanguage: String,
-    val success: Boolean,
-    val error: String? = null
-)
-package com.nadr59.sitemanager.data.model
-
-data class PageTextNode(
-    val id: String,
-    val text: String
-)
-
-data class TranslatedNode(
-    val id: String,
-    val originalText: String,
-    val translatedText: String
-)
-
-data class TranslationResult(
-    val nodes: List<TranslatedNode>,
-    val sourceLanguage: String,
-    val targetLanguage: String,
-    val success: Boolean,
-    val error: String? = null
-)
-
-
- 
-
- 
     fun clearError() { _uiState.update { it.copy(error = null) } }
 
     fun deleteHistory(id: Int) {
@@ -699,6 +655,3 @@ data class AiMessage(
     val isError: Boolean = false,
     val timestamp: Long = System.currentTimeMillis()
 )
-
- 
- 
