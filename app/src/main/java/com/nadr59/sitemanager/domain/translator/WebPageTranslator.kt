@@ -3,552 +3,289 @@ package com.nadr59.sitemanager.domain.translator
 import com.nadr59.sitemanager.data.model.PageTextNode
 import com.nadr59.sitemanager.data.model.TranslatedNode
 import org.json.JSONArray
-import org.json.JSONObject
 import org.json.JSONTokener
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * مسؤول عن التفاعل بين WebView ونظام الترجمة.
- *
- * الوظائف الرئيسية:
- * 1. استخراج النصوص القابلة للترجمة من الصفحة.
- * 2. إعطاء كل عنصر معرفاً ثابتاً.
- * 3. إعادة النصوص المترجمة إلى عناصرها الأصلية.
- * 4. ترجمة النص المحدد.
- * 5. تحليل نتائج JavaScript القادمة من WebView.
- *
- * متوافق مع:
- * - PageTextNode
- * - TranslatedNode
- * - TranslationRepository
- * - BrowserViewModel
- */
 @Singleton
 class WebPageTranslator @Inject constructor() {
 
-    // =========================================================
-    // استخراج النصوص من الصفحة
-    // =========================================================
-
-    /**
-     * يبني JavaScript لاستخراج النصوص القابلة للترجمة.
-     *
-     * ملاحظات:
-     * - لا نعدل النصوص أثناء الاستخراج.
-     * - لا نضيف معرفات مكررة.
-     * - نتجنب العناصر المخفية.
-     * - نتجنب عناصر الإعلانات والقوائم والعناصر التقنية.
-     * - نستخدم عناصر النص النهائية Leaf Nodes لتقليل التكرار.
-     */
     fun buildExtractScript(): String {
         return """
-            (function() {
-                try {
-                    const result = [];
-                    let nodeIndex = 0;
+        (function() {
+            const elements = document.querySelectorAll(
+                'h1,h2,h3,h4,h5,h6,p,li,span,a,td,th,button,label,option,blockquote,figcaption,summary'
+            );
 
-                    const selectors = [
-                        'h1',
-                        'h2',
-                        'h3',
-                        'h4',
-                        'h5',
-                        'h6',
-                        'p',
-                        'li',
-                        'span',
-                        'a',
-                        'td',
-                        'th',
-                        'button',
-                        'label',
-                        'option',
-                        'blockquote',
-                        'figcaption',
-                        'summary'
-                    ];
+            const result = [];
+            let nodeIndex = 0;
 
-                    const excludedSelectors = [
-                        'script',
-                        'style',
-                        'noscript',
-                        'template',
-                        'svg',
-                        'canvas',
-                        'textarea',
-                        'input',
-                        '[aria-hidden="true"]',
-                        '[hidden]',
-                        '[data-ai-ignore="true"]',
-                        '.ad',
-                        '.ads',
-                        '.advert',
-                        '.advertisement',
-                        '.cookie',
-                        '.popup',
-                        '.modal',
-                        '.sidebar',
-                        '.social',
-                        '.share'
-                    ];
+            elements.forEach(function(element) {
 
-                    function isExcluded(element) {
-                        for (let i = 0; i < excludedSelectors.length; i++) {
-                            try {
-                                if (element.matches(excludedSelectors[i])) {
-                                    return true;
-                                }
-                            } catch (e) {}
-                        }
+                const tag = element.tagName.toLowerCase();
 
-                        try {
-                            if (element.closest(
-                                'script,style,noscript,template,svg,canvas,textarea,input,' +
-                                '[aria-hidden="true"],[hidden],' +
-                                '[data-ai-ignore="true"]'
-                            )) {
-                                return true;
-                            }
-                        } catch (e) {}
-
-                        return false;
-                    }
-
-                    function isVisible(element) {
-                        try {
-                            const style = window.getComputedStyle(element);
-
-                            if (
-                                style.display === 'none' ||
-                                style.visibility === 'hidden' ||
-                                style.opacity === '0'
-                            ) {
-                                return false;
-                            }
-
-                            if (
-                                element.offsetWidth <= 0 ||
-                                element.offsetHeight <= 0
-                            ) {
-                                return false;
-                            }
-
-                            return true;
-
-                        } catch (e) {
-                            return true;
-                        }
-                    }
-
-                    function normalizeText(text) {
-                        return (text || '')
-                            .replace(/\u00A0/g, ' ')
-                            .replace(/[ \t]+/g, ' ')
-                            .replace(/\n{3,}/g, '\n\n')
-                            .trim();
-                    }
-
-                    const elements =
-                        document.querySelectorAll(selectors.join(','));
-
-                    elements.forEach(function(element) {
-
-                        try {
-                            if (isExcluded(element)) {
-                                return;
-                            }
-
-                            if (!isVisible(element)) {
-                                return;
-                            }
-
-                            /*
-                             * نترجم العناصر التي تحتوي على نص نهائي.
-                             *
-                             * إذا كان العنصر يحتوي على عناصر نصية
-                             * داخلية كثيرة، نتركها للعناصر الداخلية
-                             * حتى لا تتكرر الترجمة.
-                             */
-                            const childElements =
-                                element.querySelectorAll(
-                                    'h1,h2,h3,h4,h5,h6,p,li,span,a,td,th,' +
-                                    'button,label,option,blockquote,figcaption,summary'
-                                );
-
-                            if (childElements.length > 0) {
-
-                                /*
-                                 * إذا كان هناك عناصر ترجمة داخلية،
-                                 * لا نأخذ العنصر الأب إلا إذا كان
-                                 * يحتوي على نص مباشر مهم.
-                                 */
-                                let hasDirectText = false;
-
-                                for (let i = 0; i < element.childNodes.length; i++) {
-                                    const child = element.childNodes[i];
-
-                                    if (
-                                        child.nodeType === Node.TEXT_NODE &&
-                                        normalizeText(child.textContent).length > 1
-                                    ) {
-                                        hasDirectText = true;
-                                        break;
-                                    }
-                                }
-
-                                if (!hasDirectText) {
-                                    return;
-                                }
-                            }
-
-                            const text =
-                                normalizeText(element.innerText);
-
-                            /*
-                             * تجاهل النصوص القصيرة جداً.
-                             */
-                            if (text.length < 2) {
-                                return;
-                            }
-
-                            /*
-                             * تجاهل النصوص التي تبدو كروابط تقنية
-                             * أو مسارات أو كود.
-                             */
-                            if (
-                                text.length > 10000
-                            ) {
-                                return;
-                            }
-
-                            /*
-                             * منع تكرار نفس النص الموجود في عناصر
-                             * متجاورة بشكل واضح.
-                             */
-                            const nodeId =
-                                'ai_node_' + nodeIndex;
-
-                            element.setAttribute(
-                                'data-ai-translate-id',
-                                nodeId
-                            );
-
-                            result.push({
-                                id: nodeId,
-                                text: text
-                            });
-
-                            nodeIndex++;
-
-                        } catch (e) {}
-                    });
-
-                    return JSON.stringify(result);
-
-                } catch (error) {
-
-                    return JSON.stringify([]);
-
+                if (
+                    tag === 'script' ||
+                    tag === 'style' ||
+                    tag === 'noscript' ||
+                    tag === 'template' ||
+                    tag === 'svg' ||
+                    tag === 'canvas' ||
+                    tag === 'input' ||
+                    tag === 'textarea'
+                ) {
+                    return;
                 }
-            })();
+
+                const style = window.getComputedStyle(element);
+
+                if (
+                    style.display === 'none' ||
+                    style.visibility === 'hidden' ||
+                    style.opacity === '0' ||
+                    element.offsetParent === null
+                ) {
+                    return;
+                }
+
+                if (
+                    element.children.length > 0 &&
+                    !(
+                        element.children.length === 1 &&
+                        element.children[0].tagName === 'BR'
+                    )
+                ) {
+                    return;
+                }
+
+                if (element.hasAttribute('data-ai-translate-id')) {
+                    return;
+                }
+
+                const text = element.innerText
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+                if (text.length <= 1) {
+                    return;
+                }
+
+                const nodeId = 'ai_node_' + nodeIndex;
+
+                element.setAttribute(
+                    'data-ai-translate-id',
+                    nodeId
+                );
+
+                result.push({
+                    id: nodeId,
+                    text: text
+                });
+
+                nodeIndex++;
+            });
+
+            return JSON.stringify(result);
+        })();
         """.trimIndent()
     }
 
-    // =========================================================
-    // استبدال النصوص المترجمة
-    // =========================================================
-
-    /**
-     * يبني JavaScript لاستبدال النصوص الأصلية بالترجمة.
-     *
-     * استخدام JSON.stringify/JSON.parse هنا أكثر أماناً
-     * من إدخال النص مباشرة داخل علامات اقتباس JavaScript.
-     */
     fun buildReplaceScript(
         translations: List<TranslatedNode>
     ): String {
 
-        if (translations.isEmpty()) {
-            return "void(0);"
+        val items = translations.map {
+            JSONObject().apply {
+                put("id", it.id)
+                put("translatedText", it.translatedText)
+            }.toString()
         }
 
-        val script = StringBuilder()
-
-        script.append(
-            """
-            (function() {
-                try {
-                    const translations = [
-            """.trimIndent()
-        )
-
-        translations.forEachIndexed { index, node ->
-
-            val idJson =
-                JSONObject.quote(node.id)
-
-            val translatedJson =
-                JSONObject.quote(node.translatedText)
-
-            script.append(
-                """
-                    {
-                        id: $idJson,
-                        text: $translatedJson
-                    }
-                """.trimIndent()
-            )
-
-            if (index < translations.lastIndex) {
-                script.append(",")
-            }
-
-            script.append("\n")
-        }
-
-        script.append(
-            """
-                    ];
-
-                    translations.forEach(function(item) {
-
-                        try {
-
-                            const selector =
-                                '[data-ai-translate-id="' +
-                                CSS.escape(item.id) +
-                                '"]';
-
-                            const element =
-                                document.querySelector(selector);
-
-                            if (!element) {
-                                return;
-                            }
-
-                            element.innerText =
-                                item.text;
-
-                            element.setAttribute(
-                                'data-ai-translated',
-                                'true'
-                            );
-
-                            /*
-                             * اتجاه النص المترجم.
-                             *
-                             * dir=auto أفضل من فرض RTL
-                             * لأن النظام قد يترجم إلى لغة LTR.
-                             */
-                            element.setAttribute(
-                                'dir',
-                                'auto'
-                            );
-
-                            element.style.unicodeBidi =
-                                'plaintext';
-
-                        } catch (e) {}
-
-                    });
-
-                } catch (e) {}
-            })();
-            """.trimIndent()
-        )
-
-        return script.toString()
-    }
-
-    // =========================================================
-    // استخراج النص المحدد
-    // =========================================================
-
-    /**
-     * الحصول على النص الذي حدده المستخدم في WebView.
-     */
-    fun buildSelectionScript(): String {
         return """
-            (function() {
-                try {
+        (function() {
+            const translations = [
+                ${items.joinToString(",")}
+            ];
 
-                    const selection =
-                        window.getSelection();
+            const elements = document.querySelectorAll(
+                '[data-ai-translate-id]'
+            );
 
-                    if (
-                        selection &&
-                        selection.rangeCount > 0
-                    ) {
+            elements.forEach(function(element) {
 
-                        const text =
-                            selection.toString()
-                                .replace(/\u00A0/g, ' ')
-                                .trim();
+                const id = element.getAttribute(
+                    'data-ai-translate-id'
+                );
 
-                        if (text.length > 0) {
-
-                            return JSON.stringify({
-                                text: text,
-                                rangeCount: selection.rangeCount
-                            });
-                        }
+                const item = translations.find(
+                    function(t) {
+                        return t.id === id;
                     }
+                );
 
-                } catch (e) {}
+                if (!item) {
+                    return;
+                }
 
-                return JSON.stringify({
-                    text: '',
-                    rangeCount: 0
-                });
+                element.innerText = item.translatedText;
 
-            })();
+                element.setAttribute('dir', 'auto');
+                element.style.direction = 'auto';
+            });
+        })();
         """.trimIndent()
     }
 
-    // =========================================================
-    // استبدال النص المحدد
-    // =========================================================
+    fun buildSelectionScript(): String {
+        return """
+        (function() {
+            const selection = window.getSelection();
 
-    /**
-     * يستبدل النص المحدد بالترجمة.
-     *
-     * لا نضع الترجمة مباشرة داخل JavaScript.
-     * يتم تمريرها كقيمة JSON آمنة.
-     */
+            if (
+                selection &&
+                selection.toString().trim().length > 0
+            ) {
+                return JSON.stringify({
+                    text: selection.toString().trim(),
+                    rangeCount: selection.rangeCount
+                });
+            }
+
+            return JSON.stringify({
+                text: '',
+                rangeCount: 0
+            });
+        })();
+        """.trimIndent()
+    }
+
     fun buildReplaceSelectionScript(
         translatedText: String
     ): String {
 
-        val translatedJson =
-            JSONObject.quote(translatedText)
+        val escapedText = JSONObject.quote(translatedText)
 
         return """
-            (function() {
-                try {
+        (function() {
+            const selection = window.getSelection();
 
-                    const selection =
-                        window.getSelection();
+            if (
+                selection &&
+                selection.rangeCount > 0
+            ) {
+                const range = selection.getRangeAt(0);
 
-                    if (
-                        !selection ||
-                        selection.rangeCount === 0
-                    ) {
-                        return;
-                    }
+                range.deleteContents();
 
-                    const translated =
-                        $translatedJson;
+                const wrapper = document.createElement('span');
 
-                    const range =
-                        selection.getRangeAt(0);
+                wrapper.setAttribute('dir', 'auto');
+                wrapper.style.backgroundColor = '#FFF9C4';
+                wrapper.style.padding = '2px 4px';
+                wrapper.style.borderRadius = '3px';
+                wrapper.style.fontSize = '0.95em';
 
-                    range.deleteContents();
+                wrapper.innerText = $escapedText;
 
-                    const wrapper =
-                        document.createElement('span');
+                range.insertNode(wrapper);
 
-                    wrapper.innerText =
-                        translated;
-
-                    wrapper.setAttribute(
-                        'dir',
-                        'auto'
-                    );
-
-                    wrapper.setAttribute(
-                        'data-ai-selection-translation',
-                        'true'
-                    );
-
-                    wrapper.style.backgroundColor =
-                        '#FFF9C4';
-
-                    wrapper.style.padding =
-                        '2px 4px';
-
-                    wrapper.style.borderRadius =
-                        '3px';
-
-                    wrapper.style.unicodeBidi =
-                        'plaintext';
-
-                    range.insertNode(wrapper);
-
-                    selection.removeAllRanges();
-
-                } catch (e) {}
-
-            })();
+                selection.removeAllRanges();
+            }
+        })();
         """.trimIndent()
     }
 
-    // =========================================================
-    // تحليل JSON المستخرج
-    // =========================================================
+    /**
+     * يحول نتيجة evaluateJavascript من WebView
+     * إلى النص الحقيقي الموجود داخلها.
+     *
+     * مثال:
+     * WebView يعيد:
+     * "\"hello world\""
+     *
+     * والنتيجة هنا:
+     * "hello world"
+     */
+    fun decodeJavascriptResult(
+        rawResult: String?
+    ): String {
+
+        if (rawResult.isNullOrBlank()) {
+            return ""
+        }
+
+        return try {
+            val value = JSONTokener(rawResult).nextValue()
+
+            when (value) {
+                is String -> value
+                is JSONArray -> value.toString()
+                is JSONObject -> value.toString()
+                else -> value?.toString() ?: ""
+            }
+        } catch (_: Exception) {
+            rawResult
+                .removePrefix("\"")
+                .removeSuffix("\"")
+        }
+    }
 
     /**
-     * يحلل نتيجة evaluateJavascript.
-     *
-     * WebView قد يعيد:
-     *
-     * 1. JSON array مباشرة.
-     * 2. JSON string يحتوي على JSON array.
-     *
-     * لذلك نعالج الحالتين.
+     * يستخرج النص من نتيجة buildSelectionScript().
      */
+    fun parseSelectionText(
+        rawResult: String?
+    ): String {
+
+        if (rawResult.isNullOrBlank()) {
+            return ""
+        }
+
+        return try {
+            val decoded = decodeJavascriptResult(rawResult)
+
+            if (decoded.isBlank()) {
+                return ""
+            }
+
+            val json = JSONObject(decoded)
+
+            json.optString("text", "")
+                .trim()
+
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     fun parseExtractedNodes(
         jsonString: String
     ): List<PageTextNode> {
 
-        if (jsonString.isBlank() ||
-            jsonString == "null"
-        ) {
+        if (jsonString.isBlank()) {
             return emptyList()
         }
 
         return try {
+            val decoded = decodeJavascriptResult(jsonString)
 
-            val jsonValue =
-                JSONTokener(jsonString).nextValue()
+            if (decoded.isBlank()) {
+                return emptyList()
+            }
 
-            val array =
-                when (jsonValue) {
-
-                    is JSONArray ->
-                        jsonValue
-
-                    is String ->
-                        JSONArray(jsonValue)
-
-                    else ->
-                        return emptyList()
-                }
-
-            val nodes =
-                ArrayList<PageTextNode>(
-                    array.length()
-                )
+            val array = JSONArray(decoded)
+            val nodes = mutableListOf<PageTextNode>()
 
             for (i in 0 until array.length()) {
 
-                val obj =
-                    array.optJSONObject(i)
-                        ?: continue
+                val obj = array.optJSONObject(i)
+                    ?: continue
 
-                val id =
-                    obj.optString("id")
-                        .trim()
+                val id = obj.optString("id", "")
+                val text = obj.optString("text", "")
 
-                val text =
-                    obj.optString("text")
-                        .trim()
-
-                if (
-                    id.isNotBlank() &&
-                    text.isNotBlank()
-                ) {
-
+                if (id.isNotBlank() && text.isNotBlank()) {
                     nodes.add(
                         PageTextNode(
                             id = id,
@@ -559,69 +296,6 @@ class WebPageTranslator @Inject constructor() {
             }
 
             nodes
-
-        } catch (_: Exception) {
-
-            /*
-             * توافق إضافي مع بعض إصدارات WebView
-             * التي قد تعيد JSON escaped.
-             */
-            parseEscapedJson(jsonString)
-        }
-    }
-
-    // =========================================================
-    // فك JSON escaped احتياطياً
-    // =========================================================
-
-    private fun parseEscapedJson(
-        value: String
-    ): List<PageTextNode> {
-
-        return try {
-
-            val decoded =
-                JSONTokener(value).nextValue()
-                    ?.toString()
-                    ?: return emptyList()
-
-            val array =
-                JSONArray(decoded)
-
-            val result =
-                ArrayList<PageTextNode>(
-                    array.length()
-                )
-
-            for (i in 0 until array.length()) {
-
-                val obj =
-                    array.optJSONObject(i)
-                        ?: continue
-
-                val id =
-                    obj.optString("id")
-                        .trim()
-
-                val text =
-                    obj.optString("text")
-                        .trim()
-
-                if (
-                    id.isNotBlank() &&
-                    text.isNotBlank()
-                ) {
-
-                    result.add(
-                        PageTextNode(
-                            id = id,
-                            text = text
-                        )
-                    )
-                }
-            }
-
-            result
 
         } catch (_: Exception) {
             emptyList()
