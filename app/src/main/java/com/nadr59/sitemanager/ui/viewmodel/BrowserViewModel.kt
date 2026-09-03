@@ -232,6 +232,13 @@ private enum class JavascriptPurpose {
 
     fun hideTranslationSheet() {
         _uiState.update { it.copy(showTranslationSheet = false) }
+        fun onPageFinishedForTranslation() {
+    // إذا كانت الترجمة مفعّلة قبل إعادة التحميل،
+    // أعد تفعيل المراقب بعد اكتمال الصفحة
+    if (_uiState.value.isTranslationMode) {
+        _pendingJs.value = translationCoordinator.buildInstallDynamicObserverScript()
+    }
+        }
     }
 
     // ═══ لقطة الشاشة ═══
