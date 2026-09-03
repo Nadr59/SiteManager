@@ -2,7 +2,6 @@ package com.nadr59.sitemanager.domain.translator
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -26,15 +25,14 @@ class InkTranslationEngine @Inject constructor() : TranslationEngine {
         try {
             if (text.isBlank()) return@withContext Result.success("")
 
-            // ═══ تحويل "auto" إلى "en" افتراضيًا ═══
+            // ═══ تحويل "auto" إلى لغة مكتشفة ═══
             val source = if (sourceLanguage == "auto") {
                 detectLanguage(text)
             } else {
                 sourceLanguage
             }
 
-            val result = translateViaInk(text, source, targetLanguage)
-            result
+            translateViaInk(text, source, targetLanguage)
 
         } catch (e: Exception) {
             Result.failure(Exception("خطأ في الترجمة: ${e.message}"))
@@ -58,7 +56,7 @@ class InkTranslationEngine @Inject constructor() : TranslationEngine {
                 val result = translate(text, sourceLanguage, targetLanguage)
                 result.fold(
                     onSuccess = { results.add(it) },
-                    onFailure = { results.add(text) } // إبقاء النص الأصلي عند الفشل
+                    onFailure = { results.add(text) }
                 )
             }
 
@@ -100,7 +98,8 @@ class InkTranslationEngine @Inject constructor() : TranslationEngine {
 
             // ═══ قراءة الاستجابة ═══
             if (conn.responseCode != 200) {
-                val error = conn.errorStream?.bufferedReader()?.readText() ?: "HTTP ${conn.responseCode}"
+                val error = conn.errorStream?.bufferedReader()?.readText() 
+                    ?: "HTTP ${conn.responseCode}"
                 conn.disconnect()
                 return Result.failure(Exception(error))
             }
@@ -110,8 +109,6 @@ class InkTranslationEngine @Inject constructor() : TranslationEngine {
 
             // ═══ استخراج النص المترجم ═══
             val json = JSONObject(response)
-
-            // InkTranslator يعيد: { "translatedText": "مرحبا بالعالم" }
             val translated = json.optString("translatedText", "")
 
             if (translated.isNotBlank()) {
