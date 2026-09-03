@@ -23,7 +23,8 @@ class DefaultTranslationEngine @Inject constructor() : TranslationEngine {
          * لا تضع المفتاح الحقيقي داخل Git.
          */
         private const val API_KEY =
-            BuildConfig.GOOGLE_TRANSLATION_API_KEY
+           // BuildConfig.GOOGLE_TRANSLATION_API_KEY
+        "FREE" // أو ضع مفتاحك مباشرة
 
         private const val MAX_BATCH_SIZE = 100
     }
