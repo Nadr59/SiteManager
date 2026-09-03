@@ -11,12 +11,6 @@ import javax.inject.Singleton
 @Singleton
 class WebPageTranslator @Inject constructor() {
 
-    /**
-     * استخراج النصوص المرئية من الصفحة.
-     *
-     * يتم وضع data-ai-translate-id على العناصر حتى نستطيع
-     * إعادة الترجمة إلى نفس المكان لاحقاً.
-     */
     fun buildExtractScript(): String {
         return """
         (function() {
@@ -39,13 +33,8 @@ class WebPageTranslator @Inject constructor() {
                     tag === 'svg' ||
                     tag === 'canvas' ||
                     tag === 'input' ||
-                    tag === 'textarea' ||
-                    tag === 'select'
+                    tag === 'textarea'
                 ) {
-                    return;
-                }
-
-                if (element.hasAttribute('data-ai-translate-id')) {
                     return;
                 }
 
@@ -60,11 +49,6 @@ class WebPageTranslator @Inject constructor() {
                     return;
                 }
 
-                /*
-                 * نترجم العناصر النهائية فقط.
-                 * هذا يمنع ترجمة النص نفسه عدة مرات بسبب
-                 * وجود p داخل article مثلاً.
-                 */
                 if (
                     element.children.length > 0 &&
                     !(
@@ -72,6 +56,10 @@ class WebPageTranslator @Inject constructor() {
                         element.children[0].tagName === 'BR'
                     )
                 ) {
+                    return;
+                }
+
+                if (element.hasAttribute('data-ai-translate-id')) {
                     return;
                 }
 
@@ -83,22 +71,19 @@ class WebPageTranslator @Inject constructor() {
                     return;
                 }
 
-                const nodeId = 'ai_node_' + nodeIndex++;
+                const nodeId = 'ai_node_' + nodeIndex;
 
                 element.setAttribute(
                     'data-ai-translate-id',
                     nodeId
                 );
 
-                element.setAttribute(
-                    'data-ai-original-text',
-                    text
-                );
-
                 result.push({
                     id: nodeId,
                     text: text
                 });
+
+                nodeIndex++;
             });
 
             return JSON.stringify(result);
@@ -106,229 +91,114 @@ class WebPageTranslator @Inject constructor() {
         """.trimIndent()
     }
 
-    /**
-     * تثبيت مراقب للمحتوى الديناميكي.
-     *
-     * MutationObserver يراقب العناصر التي تضيفها الصفحة
-     * بعد التحميل الأول.
-     */
+    fun buildReplaceScript(
+        translations: List<TranslatedNode>
+    ): String {
+
+        val items = translations.map {
+            JSONObject().apply {
+                put("id", it.id)
+                put("translatedText", it.translatedText)
+            }.toString()
+        }
+
+        return """
+        (function() {
+            const translations = [
+                ${items.joinToString(",")}
+            ];
+
+            const elements = document.querySelectorAll(
+                '[data-ai-translate-id]'
+            );
+
+            elements.forEach(function(element) {
+
+                const id = element.getAttribute(
+                    'data-ai-translate-id'
+                );
+
+                const item = translations.find(
+                    function(t) {
+                        return t.id === id;
+                    }
+                );
+
+                if (!item) {
+                    return;
+                }
+
+                element.innerText = item.translatedText;
+
+                element.setAttribute('dir', 'auto');
+                element.style.direction = 'auto';
+            });
+        })();
+        """.trimIndent()
+    }
+
+    fun buildSelectionScript(): String {
+        return """
+        (function() {
+            const selection = window.getSelection();
+
+            if (
+                selection &&
+                selection.toString().trim().length > 0
+            ) {
+                return JSON.stringify({
+                    text: selection.toString().trim(),
+                    rangeCount: selection.rangeCount
+                });
+            }
+
+            return JSON.stringify({
+                text: '',
+                rangeCount: 0
+            });
+        })();
+        """.trimIndent()
+    }
+
+    fun buildReplaceSelectionScript(
+        translatedText: String
+    ): String {
+
+        val escapedText = JSONObject.quote(translatedText)
+
+        return """
+        (function() {
+            const selection = window.getSelection();
+
+            if (
+                selection &&
+                selection.rangeCount > 0
+            ) {
+                const range = selection.getRangeAt(0);
+
+                range.deleteContents();
+
+                const wrapper = document.createElement('span');
+
+                wrapper.setAttribute('dir', 'auto');
+                wrapper.style.backgroundColor = '#FFF9C4';
+                wrapper.style.padding = '2px 4px';
+                wrapper.style.borderRadius = '3px';
+                wrapper.style.fontSize = '0.95em';
+
+                wrapper.innerText = $escapedText;
+
+                range.insertNode(wrapper);
+
+                selection.removeAllRanges();
+            }
+        })();
+        """.trimIndent()
+    }
+
+    // ═══ مراقبة المحتوى الديناميكي ═══
     fun buildInstallDynamicObserverScript(): String {
         return """
-        (function() {
-            try {
-
-                if (window.__siteManagerTranslationObserver) {
-                    window.__siteManagerTranslationObserver.disconnect();
-                }
-
-                window.__siteManagerTranslationQueue = [];
-                window.__siteManagerTranslationCounter = 100000;
-
-                function isIgnoredElement(element) {
-                    if (!element || element.nodeType !== Node.ELEMENT_NODE) {
-                        return true;
-                    }
-
-                    const tag = element.tagName.toLowerCase();
-
-                    return (
-                        tag === 'script' ||
-                        tag === 'style' ||
-                        tag === 'noscript' ||
-                        tag === 'template' ||
-                        tag === 'svg' ||
-                        tag === 'canvas' ||
-                        tag === 'input' ||
-                        tag === 'textarea' ||
-                        tag === 'select'
-                    );
-                }
-
-                function isVisible(element) {
-                    if (!element) return false;
-
-                    const style = window.getComputedStyle(element);
-
-                    return (
-                        style.display !== 'none' &&
-                        style.visibility !== 'hidden' &&
-                        style.opacity !== '0' &&
-                        element.offsetParent !== null
-                    );
-                }
-
-                function alreadyProcessed(element) {
-                    return (
-                        element.hasAttribute('data-ai-translate-id') ||
-                        element.hasAttribute('data-ai-observed')
-                    );
-                }
-
-                function processElement(element) {
-
-                    if (!element) return;
-
-                    if (element.nodeType === Node.TEXT_NODE) {
-
-                        const parent = element.parentElement;
-
-                        if (
-                            !parent ||
-                            isIgnoredElement(parent) ||
-                            !isVisible(parent)
-                        ) {
-                            return;
-                        }
-
-                        if (parent.hasAttribute('data-ai-translate-id')) {
-                            return;
-                        }
-
-                        const text = element.textContent
-                            .replace(/\s+/g, ' ')
-                            .trim();
-
-                        if (text.length <= 1) {
-                            return;
-                        }
-
-                        const id =
-                            'ai_dynamic_node_' +
-                            window.__siteManagerTranslationCounter++;
-
-                        const wrapper =
-                            document.createElement('span');
-
-                        wrapper.setAttribute(
-                            'data-ai-translate-id',
-                            id
-                        );
-
-                        wrapper.setAttribute(
-                            'data-ai-observed',
-                            'true'
-                        );
-
-                        wrapper.setAttribute(
-                            'data-ai-original-text',
-                            text
-                        );
-
-                        /*
-                         * نستبدل TextNode بـ wrapper مع الاحتفاظ
-                         * بالنص الأصلي داخله.
-                         */
-                        element.parentNode.insertBefore(
-                            wrapper,
-                            element
-                        );
-
-                        wrapper.appendChild(element);
-
-                        window.__siteManagerTranslationQueue.push({
-                            id: id,
-                            text: text
-                        });
-
-                        return;
-                    }
-
-                    if (element.nodeType !== Node.ELEMENT_NODE) {
-                        return;
-                    }
-
-                    if (isIgnoredElement(element)) {
-                        return;
-                    }
-
-                    if (alreadyProcessed(element)) {
-                        return;
-                    }
-
-                    const children =
-                        Array.from(element.childNodes);
-
-                    children.forEach(function(child) {
-                        processElement(child);
-                    });
-                }
-
-                window.__siteManagerTranslationObserver =
-                    new MutationObserver(function(mutations) {
-
-                        mutations.forEach(function(mutation) {
-
-                            mutation.addedNodes.forEach(
-                                function(node) {
-
-                                    if (
-                                        node.nodeType ===
-                                        Node.ELEMENT_NODE
-                                    ) {
-                                        processElement(node);
-                                    }
-                                }
-                            );
-                        });
-                    });
-
-                if (document.body) {
-                    window.__siteManagerTranslationObserver.observe(
-                        document.body,
-                        {
-                            childList: true,
-                            subtree: true
-                        }
-                    );
-                }
-
-                return 'observer_installed';
-
-            } catch (e) {
-                return 'observer_error';
-            }
-        })();
-        """.trimIndent()
-    }
-
-    /**
-     * استخراج العناصر الجديدة التي اكتشفها MutationObserver.
-     */
-    fun buildPollDynamicNodesScript(): String {
-        return """
-        (function() {
-            try {
-
-                if (
-                    !window.__siteManagerTranslationQueue ||
-                    window.__siteManagerTranslationQueue.length === 0
-                ) {
-                    return JSON.stringify([]);
-                }
-
-                const result =
-                    window.__siteManagerTranslationQueue.splice(
-                        0,
-                        50
-                    );
-
-                return JSON.stringify(result);
-
-            } catch (e) {
-                return JSON.stringify([]);
-            }
-        })();
-        """.trimIndent()
-    }
-
-    /**
-     * إعادة النص المترجم إلى العناصر.
-     *
-     * textContent يستخدم بدلاً من innerHTML حتى لا يتم
-     * تنفيذ HTML قادم من خدمة الترجمة.
-     */
-     fun buildInstallDynamicObserverScript(): String {
-    return """
         (function() {
             try {
                 if (window.__siteManagerTranslationObserver) {
@@ -411,152 +281,33 @@ class WebPageTranslator @Inject constructor() {
                 return 'observer_error';
             }
         })();
-    """.trimIndent()
-     }
-    fun buildReplaceScript(
-        translations: List<TranslatedNode>
-    ): String {
+        """.trimIndent()
+    }
 
-        val jsonArray = JSONArray()
-
-        translations.forEach {
-            jsonArray.put(
-                JSONObject().apply {
-                    put("id", it.id)
-                    put("translatedText", it.translatedText)
-                }
-            )
-        }
-
+    // ═══ استعلام عن المحتوى الديناميكي ═══
+    fun buildPollDynamicNodesScript(): String {
         return """
         (function() {
-
-            const translations =
-                $jsonArray;
-
-            translations.forEach(function(item) {
-
-                const element =
-                    document.querySelector(
-                        '[data-ai-translate-id="' +
-                        CSS.escape(item.id) +
-                        '"]'
-                    );
-
-                if (!element) {
-                    return;
+            try {
+                if (!window.__siteManagerTranslationQueue) {
+                    return JSON.stringify([]);
                 }
 
-                /*
-                 * إذا كان wrapper ديناميكيًا يحتوي على TextNode،
-                 * textContent يحافظ على wrapper نفسه.
-                 */
-                element.textContent =
-                    item.translatedText;
+                const queue = window.__siteManagerTranslationQueue;
+                window.__siteManagerTranslationQueue = [];
 
-                element.setAttribute(
-                    'data-ai-translated',
-                    'true'
-                );
-
-                element.setAttribute(
-                    'dir',
-                    'auto'
-                );
-
-                element.style.direction = 'auto';
-            });
-
-        })();
-        """.trimIndent()
-    }
-
-    fun buildSelectionScript(): String {
-        return """
-        (function() {
-
-            const selection =
-                window.getSelection();
-
-            if (
-                selection &&
-                selection.toString().trim().length > 0
-            ) {
-                return JSON.stringify({
-                    text: selection.toString().trim(),
-                    rangeCount: selection.rangeCount
-                });
+                return JSON.stringify(queue);
+            } catch (e) {
+                return JSON.stringify([]);
             }
-
-            return JSON.stringify({
-                text: '',
-                rangeCount: 0
-            });
-
         })();
         """.trimIndent()
     }
 
-    fun buildReplaceSelectionScript(
-        translatedText: String
-    ): String {
-
-        val escapedText =
-            JSONObject.quote(translatedText)
-
-        return """
-        (function() {
-
-            const selection =
-                window.getSelection();
-
-            if (
-                selection &&
-                selection.rangeCount > 0
-            ) {
-
-                const range =
-                    selection.getRangeAt(0);
-
-                range.deleteContents();
-
-                const wrapper =
-                    document.createElement('span');
-
-                wrapper.setAttribute(
-                    'dir',
-                    'auto'
-                );
-
-                wrapper.setAttribute(
-                    'data-ai-selection-translation',
-                    'true'
-                );
-
-                wrapper.style.backgroundColor =
-                    '#FFF9C4';
-
-                wrapper.style.padding =
-                    '2px 4px';
-
-                wrapper.style.borderRadius =
-                    '3px';
-
-                wrapper.style.fontSize =
-                    '0.95em';
-
-                wrapper.textContent =
-                    $escapedText;
-
-                range.insertNode(wrapper);
-
-                selection.removeAllRanges();
-            }
-
-        })();
-        """.trimIndent()
-    }
-
+    /**
+     * يحول نتيجة evaluateJavascript من WebView
+     * إلى النص الحقيقي الموجود داخلها.
+     */
     fun decodeJavascriptResult(
         rawResult: String?
     ): String {
@@ -566,9 +317,7 @@ class WebPageTranslator @Inject constructor() {
         }
 
         return try {
-
-            val value =
-                JSONTokener(rawResult).nextValue()
+            val value = JSONTokener(rawResult).nextValue()
 
             when (value) {
                 is String -> value
@@ -576,39 +325,38 @@ class WebPageTranslator @Inject constructor() {
                 is JSONObject -> value.toString()
                 else -> value?.toString() ?: ""
             }
-
         } catch (_: Exception) {
-
             rawResult
                 .removePrefix("\"")
                 .removeSuffix("\"")
         }
     }
 
+    /**
+     * يستخرج النص من نتيجة buildSelectionScript().
+     */
     fun parseSelectionText(
         rawResult: String?
-    ): String? {
+    ): String {
 
         if (rawResult.isNullOrBlank()) {
-            return null
+            return ""
         }
 
         return try {
-
-            val decoded =
-                decodeJavascriptResult(rawResult)
+            val decoded = decodeJavascriptResult(rawResult)
 
             if (decoded.isBlank()) {
-                return null
+                return ""
             }
 
-            JSONObject(decoded)
-                .optString("text", "")
+            val json = JSONObject(decoded)
+
+            json.optString("text", "")
                 .trim()
-                .ifBlank { null }
 
         } catch (_: Exception) {
-            null
+            ""
         }
     }
 
@@ -621,36 +369,24 @@ class WebPageTranslator @Inject constructor() {
         }
 
         return try {
-
-            val decoded =
-                decodeJavascriptResult(jsonString)
+            val decoded = decodeJavascriptResult(jsonString)
 
             if (decoded.isBlank()) {
                 return emptyList()
             }
 
-            val array =
-                JSONArray(decoded)
-
-            val nodes =
-                mutableListOf<PageTextNode>()
+            val array = JSONArray(decoded)
+            val nodes = mutableListOf<PageTextNode>()
 
             for (i in 0 until array.length()) {
 
-                val obj =
-                    array.optJSONObject(i)
-                        ?: continue
+                val obj = array.optJSONObject(i)
+                    ?: continue
 
-                val id =
-                    obj.optString("id", "")
+                val id = obj.optString("id", "")
+                val text = obj.optString("text", "")
 
-                val text =
-                    obj.optString("text", "")
-
-                if (
-                    id.isNotBlank() &&
-                    text.isNotBlank()
-                ) {
+                if (id.isNotBlank() && text.isNotBlank()) {
                     nodes.add(
                         PageTextNode(
                             id = id,
