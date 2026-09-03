@@ -18,14 +18,6 @@ android {
         versionName = "2.0"
     }
 
-    // السماح بالاتصال بالخوادم الخارجية
-    packagingOptions {
-        resources {
-            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
-        }
-    }
-}
-
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -43,16 +35,20 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+        freeCompilerArgs += listOf(
+            "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        )
     }
 
     buildFeatures {
         compose = true
     }
-kotlinOptions {
-        freeCompilerArgs += listOf(
-            "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
-            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
-        )
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 }
 
@@ -95,11 +91,10 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-// Markdown renderer
+
+    // Markdown renderer
     implementation("com.github.jeziellago:compose-markdown:0.5.4")
-// Coil للصور
-implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // Coil للصور
+    implementation("io.coil-kt:coil-compose:2.7.0")
 }
-
-
