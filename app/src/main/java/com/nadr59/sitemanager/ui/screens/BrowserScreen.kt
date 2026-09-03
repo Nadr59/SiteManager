@@ -1,4 +1,4 @@
-package com.nadr59.sitemanager.ui.screens
+ package com.nadr59.sitemanager.ui.screens
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -737,5 +737,1012 @@ fun BrowserScreen(
                 viewModel.clearScreenshot()
             }
         )
+    }
+}
+// ═══════════════════════════════════════════════
+// ورقة الترجمة
+// ═══════════════════════════════════════════════
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TranslationBottomSheet(
+    currentLanguage: String,
+    onLanguageSelected: (String) -> Unit,
+    onTranslatePage: () -> Unit,
+    onTranslateSelection: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val languages = listOf(
+        "ar" to "العربية",
+        "en" to "الإنجليزية",
+        "fr" to "الفرنسية",
+        "de" to "الألمانية",
+        "es" to "الإسبانية",
+        "zh" to "الصينية",
+        "ja" to "اليابانية",
+        "ko" to "الكورية",
+        "ru" to "الروسية",
+        "tr" to "التركية",
+        "it" to "الإيطالية",
+        "pt" to "البرتغالية"
+    )
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    Icons.Default.Translate,
+                    null,
+                    Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "ترجمة الصفحة",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+
+            Text(
+                "اختر لغة الترجمة:",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            // ═══ قائمة اللغات ═══
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(languages) { (code, name) ->
+                    Surface(
+                        onClick = { onLanguageSelected(code) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (currentLanguage == code)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(
+                                horizontal = 16.dp,
+                                vertical = 12.dp
+                            ),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                name,
+                                fontSize = 14.sp,
+                                fontWeight = if (currentLanguage == code)
+                                    FontWeight.Bold
+                                else
+                                    FontWeight.Normal,
+                                color = if (currentLanguage == code)
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (currentLanguage == code) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(8.dp)
+                                ) {}
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
+            // ═══ أزرار الترجمة ═══
+            Button(
+                onClick = {
+                    onTranslatePage()
+                    onDismiss()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Translate,
+                    null,
+                    Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("ترجمة الصفحة كاملة")
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            TextButton(
+                onClick = onTranslateSelection,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("ترجمة النص المحدد فقط")
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════
+// ورقة التاريخ
+// ═══════════════════════════════════════════════
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BrowserHistorySheet(
+    history: List<com.nadr59.sitemanager.data.local.BrowserHistory>,
+    onSelect: (com.nadr59.sitemanager.data.local.BrowserHistory) -> Unit,
+    onDelete: (com.nadr59.sitemanager.data.local.BrowserHistory) -> Unit,
+    onClearAll: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "سجل التصفح",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                if (history.isNotEmpty()) {
+                    TextButton(onClick = onClearAll) {
+                        Text(
+                            "مسح الكل",
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            if (history.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "لا يوجد سجل تصفح",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.height(400.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(
+                        history,
+                        key = { it.id }
+                    ) { item ->
+                        Surface(
+                            onClick = { onSelect(item) },
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        item.title.ifBlank { item.url },
+                                        fontSize = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        item.url
+                                            .removePrefix("https://")
+                                            .removePrefix("http://"),
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme
+                                            .onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onDelete(item) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        null,
+                                        Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme
+                                            .onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════
+// ورقة الإشارات
+// ═══════════════════════════════════════════════
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BrowserBookmarksSheet(
+    bookmarks: List<com.nadr59.sitemanager.data.local.BrowserBookmark>,
+    onSelect: (com.nadr59.sitemanager.data.local.BrowserBookmark) -> Unit,
+    onDelete: (com.nadr59.sitemanager.data.local.BrowserBookmark) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Text(
+                "الإشارات المرجعية",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            if (bookmarks.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "لا توجد إشارات مرجعية",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.height(400.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(
+                        bookmarks,
+                        key = { it.id }
+                    ) { item ->
+                        Surface(
+                            onClick = { onSelect(item) },
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Bookmark,
+                                    null,
+                                    Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        item.title.ifBlank { item.url },
+                                        fontSize = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        item.url
+                                            .removePrefix("https://")
+                                            .removePrefix("http://"),
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme
+                                            .onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onDelete(item) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        null,
+                                        Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════
+// ورقة الملخص الذكي
+// ═══════════════════════════════════════════════
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SummaryBottomSheet(
+    summary: String?,
+    isLoading: Boolean,
+    pageTitle: String,
+    onDismiss: () -> Unit,
+    onShare: (String) -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Summarize,
+                        null,
+                        Modifier.size(22.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "ملخص ذكي",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                }
+                if (summary != null) {
+                    IconButton(onClick = { onShare(summary) }) {
+                        Icon(Icons.Default.Share, "مشاركة")
+                    }
+                }
+            }
+
+            if (pageTitle.isNotBlank()) {
+                Text(
+                    pageTitle,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
+
+            when {
+                isLoading -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "جارٍ تلخيص الصفحة...",
+                            color = MaterialTheme.colorScheme
+                                .onSurfaceVariant,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+
+                summary != null -> {
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = 24.sp
+                    )
+                }
+
+                else -> {
+                    Text(
+                        "لا يوجد ملخص متاح",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════
+// ورقة مساعد AI
+// ═══════════════════════════════════════════════
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AiChatBottomSheet(
+    messages: List<AiMessage>,
+    isThinking: Boolean,
+    pageTitle: String,
+    onSendMessage: (String) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var question by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                null,
+                                Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onTertiary
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            "مساعد AI",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            "اسأل عن محتوى هذه الصفحة",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme
+                                .onSurfaceVariant
+                        )
+                    }
+                }
+                if (messages.isNotEmpty()) {
+                    TextButton(onClick = onClear) {
+                        Text(
+                            "مسح",
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            if (messages.isEmpty()) {
+                val quickQuestions = listOf(
+                    "ما موضوع هذه الصفحة؟",
+                    "لخّص المحتوى في نقاط",
+                    "ما أهم المعلومات هنا؟",
+                    "هل هذا المحتوى موثوق؟"
+                )
+                Column {
+                    Text(
+                        "أسئلة سريعة:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    quickQuestions.forEach { q ->
+                        Surface(
+                            onClick = {
+                                onSendMessage(q)
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp)
+                        ) {
+                            Text(
+                                q,
+                                modifier = Modifier.padding(
+                                    horizontal = 16.dp,
+                                    vertical = 10.dp
+                                ),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
+            if (messages.isNotEmpty()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(messages) { message ->
+                        ChatMessageBubble(message = message)
+                    }
+                    if (isThinking) {
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Start
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme
+                                        .surfaceVariant
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment =
+                                            Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("يفكر...", fontSize = 13.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = question,
+                    onValueChange = { question = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = {
+                        Text("اكتب سؤالك...", fontSize = 13.sp)
+                    },
+                    shape = RoundedCornerShape(24.dp),
+                    singleLine = true,
+                    enabled = !isThinking
+                )
+                Spacer(Modifier.width(8.dp))
+                Surface(
+                    onClick = {
+                        if (question.isNotBlank() && !isThinking) {
+                            onSendMessage(question)
+                            question = ""
+                        }
+                    },
+                    shape = CircleShape,
+                    color = if (question.isNotBlank() && !isThinking)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Send,
+                            null,
+                            Modifier.size(20.dp),
+                            tint = if (question.isNotBlank() && !isThinking)
+                                MaterialTheme.colorScheme.onPrimary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun ChatMessageBubble(message: AiMessage) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (message.isUser)
+            Arrangement.End
+        else
+            Arrangement.Start
+    ) {
+        Surface(
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (message.isUser) 16.dp else 4.dp,
+                bottomEnd = if (message.isUser) 4.dp else 16.dp
+            ),
+            color = when {
+                message.isError ->
+                    MaterialTheme.colorScheme.errorContainer
+                message.isUser ->
+                    MaterialTheme.colorScheme.primary
+                else ->
+                    MaterialTheme.colorScheme.surfaceVariant
+            },
+            modifier = Modifier.widthIn(max = 280.dp)
+        ) {
+            Text(
+                text = message.text,
+                modifier = Modifier.padding(12.dp),
+                fontSize = 14.sp,
+                color = when {
+                    message.isError ->
+                        MaterialTheme.colorScheme.onErrorContainer
+                    message.isUser ->
+                        MaterialTheme.colorScheme.onPrimary
+                    else ->
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                lineHeight = 20.sp
+            )
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════
+// ورقة الملاحظات
+// ═══════════════════════════════════════════════
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PageNotesBottomSheet(
+    notes: List<PageNote>,
+    pageTitle: String,
+    onAddNote: (String) -> Unit,
+    onUpdateNote: (PageNote, String) -> Unit,
+    onDeleteNote: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var newNoteText by remember { mutableStateOf("") }
+    var editingNote by remember { mutableStateOf<PageNote?>(null) }
+    var editText by remember { mutableStateOf("") }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.NoteAdd,
+                    null,
+                    Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "ملاحظاتي",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    if (pageTitle.isNotBlank()) {
+                        Text(
+                            pageTitle,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme
+                                .onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Text(
+                    "${notes.size} ملاحظة",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
+
+            OutlinedTextField(
+                value = newNoteText,
+                onValueChange = { newNoteText = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = {
+                    Text("اكتب ملاحظة عن هذه الصفحة...")
+                },
+                shape = RoundedCornerShape(12.dp),
+                minLines = 2,
+                maxLines = 4,
+                trailingIcon = {
+                    if (newNoteText.isNotBlank()) {
+                        IconButton(onClick = {
+                            onAddNote(newNoteText)
+                            newNoteText = ""
+                        }) {
+                            Icon(
+                                Icons.Default.Save,
+                                null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            if (notes.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("📝", fontSize = 32.sp)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "لا توجد ملاحظات بعد",
+                            color = MaterialTheme.colorScheme
+                                .onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.height(300.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(notes, key = { it.id }) { note ->
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme
+                                    .colorScheme.surfaceVariant
+                            )
+                        ) {
+                            if (editingNote?.id == note.id) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = editText,
+                                        onValueChange = { editText = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        minLines = 2
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement =
+                                            Arrangement.End
+                                    ) {
+                                        TextButton(
+                                            onClick = { editingNote = null }
+                                        ) {
+                                            Text("إلغاء")
+                                        }
+                                        Button(onClick = {
+                                            onUpdateNote(note, editText)
+                                            editingNote = null
+                                        }) {
+                                            Text("حفظ")
+                                        }
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text(
+                                        note.note,
+                                        modifier = Modifier.weight(1f),
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp
+                                    )
+                                    Column {
+                                        IconButton(
+                                            onClick = {
+                                                editingNote = note
+                                                editText = note.note
+                                            },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Edit,
+                                                null,
+                                                Modifier.size(14.dp),
+                                                tint = MaterialTheme
+                                                    .colorScheme
+                                                    .onSurfaceVariant
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                onDeleteNote(note.id)
+                                            },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                null,
+                                                Modifier.size(14.dp),
+                                                tint = MaterialTheme
+                                                    .colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════
+// حوار لقطة الشاشة
+// ═══════════════════════════════════════════════
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ScreenshotDialog(
+    imagePath: String,
+    onShare: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Camera,
+                        null,
+                        Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "لقطة الشاشة",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, "إغلاق")
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            AsyncImage(
+                model = java.io.File(imagePath),
+                contentDescription = "لقطة الشاشة",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = onShare,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Share,
+                        null,
+                        Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("مشاركة")
+                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("إغلاق")
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
     }
 }
