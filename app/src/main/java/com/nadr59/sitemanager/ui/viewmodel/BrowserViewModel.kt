@@ -85,9 +85,103 @@ class BrowserViewModel @Inject constructor(
 
     private var currentSiteId = 0
     private var currentPageContent = ""
+    private var dynamicTranslationPolling = false
+    private var pendingJavascriptPurpose: JavascriptPurpose =
+    JavascriptPurpose.None
+
+private enum class JavascriptPurpose {
+    None,
+    InitialExtraction,
+    DynamicPolling,
+    Replace
+}
+    
+    fun pollDynamicTranslation() {
+    if (!_uiState.value.isTranslationMode) return
+    if (_uiState.value.isTranslating) return
+    if (_pendingJs.value != null) return
+    if (dynamicTranslationPolling) return
+
+    dynamicTranslationPolling = true
+    pendingJavascriptPurpose = JavascriptPurpose.DynamicPolling
+    _pendingJs.value = translationCoordinator.pollDynamicNodesScript()
+    }
+    fun onDynamicJavascriptResult(rawResult: String?) {
+    dynamicTranslationPolling = false
+
+    when (val result = translationCoordinator.decodeAndClassify(rawResult)) {
+        is JavascriptResult.Nodes -> {
+            if (result.nodes.isNotEmpty()) {
+                handleDynamicNodes(result.nodes)
+            }
+        }
+
+        else -> Unit
+    }
+    }
+
+    private fun handleDynamicNodes(nodes: List<PageTextNode>) {
+    if (nodes.isEmpty()) return
+    if (_uiState.value.isTranslating) return
+
+    _uiState.update {
+        it.copy(
+            isTranslating = true,
+            translationProgress = 0f,
+            error = null
+        )
+    }
+
+    viewModelScope.launch {
+        val result = translationCoordinator.translatePage(
+            nodes = nodes,
+            targetLanguage = _uiState.value.targetLanguage,
+            onProgress = { progress ->
+                _uiState.update {
+                    it.copy(
+                        translationProgress = progress.coerceIn(0f, 1f)
+                    )
+                }
+            }
+        )
+
+        result.fold(
+            onSuccess = { translated ->
+                if (translated.isNotEmpty()) {
+                    _translatedNodes.update { existing ->
+                        existing + translated
+                    }
+
+                    _pendingJs.value =
+                        translationCoordinator.replaceScript(translated)
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isTranslating = false,
+                        translationProgress = 1f
+                    )
+                }
+            },
+
+            onFailure = { error ->
+                _uiState.update {
+                    it.copy(
+                        isTranslating = false,
+                        translationProgress = 0f,
+                        error = "فشل ترجمة المحتوى الجديد: ${
+                            error.message ?: "خطأ غير معروف"
+                        }"
+                    )
+                }
+            }
+        )
+    }
+    }
+    
 
     fun onJsExecuted() {
-        _pendingJs.value = null
+    _pendingJs.value = null
     }
 
     fun loadSite(siteId: Int) {
@@ -421,14 +515,66 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
         _pendingJs.value = translationCoordinator.extractScript()
+      
+         pendingJavascriptPurpose = JavascriptPurpose.InitialExtraction
     }
 
     fun onJavascriptResult(rawResult: String?) {
-        when (val result = translationCoordinator.decodeAndClassify(rawResult)) {
-            is JavascriptResult.Nodes -> handleExtractedNodes(result.nodes)
-            is JavascriptResult.Selection -> handleSelectedText(result.text)
-            else -> Unit
+    when (pendingJavascriptPurpose) {
+
+        JavascriptPurpose.DynamicPolling -> {
+            dynamicTranslationPolling = false
+
+            when (
+                val result =
+                    translationCoordinator.decodeAndClassify(rawResult)
+            ) {
+                is JavascriptResult.Nodes -> {
+                    if (result.nodes.isNotEmpty()) {
+                        handleDynamicNodes(result.nodes)
+                    }
+                }
+
+                else -> Unit
+            }
         }
+
+        JavascriptPurpose.InitialExtraction -> {
+            when (
+                val result =
+                    translationCoordinator.decodeAndClassify(rawResult)
+            ) {
+                is JavascriptResult.Nodes -> {
+                    handleExtractedNodes(result.nodes)
+                }
+
+                is JavascriptResult.Selection -> {
+                    handleSelectedText(result.text)
+                }
+
+                else -> Unit
+            }
+        }
+
+        else -> {
+            when (
+                val result =
+                    translationCoordinator.decodeAndClassify(rawResult)
+            ) {
+                is JavascriptResult.Nodes -> {
+                    handleExtractedNodes(result.nodes)
+                }
+
+                is JavascriptResult.Selection -> {
+                    handleSelectedText(result.text)
+                }
+
+                else -> Unit
+            }
+        }
+    }
+
+    pendingJavascriptPurpose = JavascriptPurpose.None
     }
 
     fun onNodesExtracted(jsonString: String) {
@@ -507,12 +653,21 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     }
 
     fun resetTranslation() {
-        _uiState.update {
-            it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f, error = null)
-        }
-        _extractedNodes.value = emptyList()
-        _translatedNodes.value = emptyList()
-        _pendingJs.value = "window.location.reload();"
+    dynamicTranslationPolling = false
+    pendingJavascriptPurpose = JavascriptPurpose.None
+
+    _uiState.update {
+        it.copy(
+            isTranslationMode = false,
+            isTranslating = false,
+            translationProgress = 0f,
+            error = null
+        )
+    }
+
+    _extractedNodes.value = emptyList()
+    _translatedNodes.value = emptyList()
+    _pendingJs.value = "window.location.reload();"
     }
 
     fun clearError() {
