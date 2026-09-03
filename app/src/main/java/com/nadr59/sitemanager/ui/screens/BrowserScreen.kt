@@ -386,6 +386,62 @@ LaunchedEffect(pendingJs) {
                                     showMenu = false
                                 }
                             )
+                            HorizontalDivider()
+
+// ═══ حفظ للقراءة لاحقاً ═══
+DropdownMenuItem(
+    text = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (uiState.isSavingPage) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    if (uiState.isPageSaved)
+                        Icons.Default.BookmarkAdded
+                    else
+                        Icons.Default.SaveAlt,
+                    null,
+                    Modifier.size(18.dp),
+                    tint = if (uiState.isPageSaved)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (uiState.isPageSaved) "محفوظة للقراءة" else "حفظ للقراءة لاحقاً"
+            )
+        }
+    },
+    enabled = !uiState.isSavingPage,
+    onClick = {
+        if (!uiState.isPageSaved) viewModel.saveCurrentPage()
+        showMenu = false
+    }
+)
+
+// ═══ الصفحات المحفوظة ═══
+DropdownMenuItem(
+    text = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Default.CollectionsBookmark,
+                null,
+                Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("مكتبة القراءة")
+        }
+    },
+    onClick = {
+        showSavedPages = true
+        showMenu = false
+    }
+)
 
                             DropdownMenuItem(
                                 text = { Text("سجل التصفح") },
@@ -615,6 +671,58 @@ LaunchedEffect(pendingJs) {
                     }
                 }
             }
+            // ═══ مؤشر القراءة الذكية ═══
+AnimatedVisibility(
+    visible = uiState.smartReadStep != SmartReadStep.IDLE
+            && uiState.smartReadStep != SmartReadStep.DONE
+            && !uiState.isSmartReadMode,
+    enter = expandVertically(),
+    exit = shrinkVertically(),
+    modifier = Modifier.align(Alignment.TopCenter)
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.tertiary
+            )
+            Column {
+                Text(
+                    text = when (uiState.smartReadStep) {
+                        SmartReadStep.CLEANING    -> "تنظيف الصفحة..."
+                        SmartReadStep.EXTRACTING  -> "استخراج المحتوى..."
+                        SmartReadStep.TRANSLATING ->
+                            "ترجمة... ${(uiState.translationProgress * 100).toInt()}%"
+                        else -> ""
+                    },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Text(
+                    text = "قراءة بالعربية",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
 
             // ═══ رسالة الخطأ ═══
             val error = uiState.error
@@ -652,7 +760,22 @@ LaunchedEffect(pendingJs) {
             onDismiss = { viewModel.hideTranslationSheet() }
         )
     }
+    
 
+
+// ═══ مكتبة القراءة ═══
+if (showSavedPages) {
+    SavedPagesSheet(
+        pages = savedPages,
+        onSelect = { page ->
+            // فتح الصفحة المحفوظة في المتصفح
+            webView?.loadUrl(page.url)
+            showSavedPages = false
+        },
+        onDelete = { page -> viewModel.deleteSavedPage(page.id) },
+        onDismiss = { showSavedPages = false }
+    )
+}
     // ═══ ورقة التاريخ ═══
     if (showHistory) {
         BrowserHistorySheet(
