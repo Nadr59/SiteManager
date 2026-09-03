@@ -97,6 +97,9 @@ import com.nadr59.sitemanager.viewmodel.BrowserViewModel
 import kotlinx.coroutines.delay
 import com.nadr59.sitemanager.data.local.SavedPage
 import com.nadr59.sitemanager.data.model.SmartReadStep
+import androidx.compose.material.icons.filled.BookmarkAdded
+import androidx.compose.material.icons.filled.CollectionsBookmark
+import androidx.compose.material.icons.filled.SaveAlt
 
 // ═══════════════════════════════════════════════════════════
 // الشاشة الرئيسية
@@ -230,6 +233,24 @@ LaunchedEffect(pendingJs) {
                                 MaterialTheme.colorScheme.onSurface
                         )
                     }
+                    // ═══ قراءة بالعربية (SmartRead) ═══
+IconButton(
+    onClick = { viewModel.startSmartRead() }
+) {
+    Icon(
+        imageVector = Icons.Default.Translate,
+        contentDescription = "قراءة بالعربية",
+        tint = when {
+            uiState.isSmartReadMode ->
+                MaterialTheme.colorScheme.primary
+            uiState.smartReadStep != SmartReadStep.IDLE &&
+            uiState.smartReadStep != SmartReadStep.DONE ->
+                MaterialTheme.colorScheme.tertiary
+            else ->
+                MaterialTheme.colorScheme.onSurface
+        }
+    )
+}
 
                     IconButton(onClick = { viewModel.toggleBookmark() }) {
                         Icon(
