@@ -18,6 +18,14 @@ android {
         versionName = "2.0"
     }
 
+    // السماح بالاتصال بالخوادم الخارجية
+    packagingOptions {
+        resources {
+            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
+        }
+    }
+}
+
     buildTypes {
         release {
             isMinifyEnabled = false
