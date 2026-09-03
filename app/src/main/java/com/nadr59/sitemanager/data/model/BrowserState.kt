@@ -12,7 +12,20 @@ data class BrowserState(
     val isTranslating: Boolean = false,
     val translationProgress: Float = 0f,
     val showTranslationSheet: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+
+    // ═══ حالات القراءة الذكية ═══
+    val isSmartReadMode: Boolean = false,      // هل وضع "قراءة بالعربية" مفعّل؟
+    val smartReadStep: SmartReadStep = SmartReadStep.IDLE,  // الخطوة الحالية
+    val isPageSaved: Boolean = false,          // هل الصفحة الحالية محفوظة؟
+    val isSavingPage: Boolean = false          // هل جارٍ الحفظ؟
 )
 
-
+// ═══ خطوات وضع القراءة الذكية ═══
+enum class SmartReadStep {
+    IDLE,           // لا شيء يعمل
+    EXTRACTING,     // استخراج المحتوى
+    CLEANING,       // تنظيف الصفحة (Reader Mode)
+    TRANSLATING,    // الترجمة
+    DONE            // اكتمل
+}
