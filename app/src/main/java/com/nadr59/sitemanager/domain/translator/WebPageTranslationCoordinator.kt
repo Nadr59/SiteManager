@@ -36,6 +36,24 @@ class WebPageTranslationCoordinator @Inject constructor(
         }
         return JavascriptResult.Other(value)
     }
+    fun pollDynamicNodesScript(): String {
+    return """
+        (function() {
+            try {
+                if (!window.__siteManagerTranslationQueue) {
+                    return JSON.stringify([]);
+                }
+
+                const queue = window.__siteManagerTranslationQueue;
+                window.__siteManagerTranslationQueue = [];
+
+                return JSON.stringify(queue);
+            } catch (e) {
+                return JSON.stringify([]);
+            }
+        })();
+    """.trimIndent()
+    }
 
     suspend fun translatePage(
         nodes: List<PageTextNode>,
