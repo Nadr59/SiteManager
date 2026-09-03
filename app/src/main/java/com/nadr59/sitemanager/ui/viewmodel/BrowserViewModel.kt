@@ -551,14 +551,25 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
             )
             result.fold(
                 onSuccess = { translated ->
-                    _translatedNodes.value = translated
-                    _pendingJs.value = translationCoordinator.replaceScript(translated)
-                    _uiState.update {
-                        it.copy(isTranslating = false, isTranslationMode = true, translationProgress = 1f)
-                    }
-                    // تفعيل المراقب الديناميكي
-                    _pendingJs.value = translationCoordinator.installDynamicObserverScript()
-                },
+                  _translatedNodes.value = translated
+
+                // ═══ تنفيذ الترجمة أولاً ═══
+              _pendingJs.value = translationCoordinator.replaceScript(translated)
+
+             _uiState.update {
+                it.copy(
+                 isTranslating = false,
+                 isTranslationMode = true,
+                 translationProgress = 1f
+               )
+            }
+
+            // ═══ تثبيت المراقب بعد تأخير ═══
+            // سيُنفَّذ بعد انتهاء replaceScript
+             kotlinx.coroutines.delay(500)
+             _pendingJs.value =
+              translationCoordinator.installDynamicObserverScript()
+           },
                 onFailure = { error ->
                     _uiState.update {
                         it.copy(
