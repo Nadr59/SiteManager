@@ -97,6 +97,7 @@ import com.nadr59.sitemanager.data.local.PageNote
 import com.nadr59.sitemanager.viewmodel.AiMessage
 import com.nadr59.sitemanager.viewmodel.BrowserViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,6 +146,18 @@ fun BrowserScreen(
             }
         }
     }
+    // ═══ مراقبة المحتوى الديناميكي أثناء الترجمة ═══
+LaunchedEffect(uiState.isTranslationMode, webView) {
+    if (!uiState.isTranslationMode) return@LaunchedEffect
+
+    while (true) {
+        delay(1500L)
+
+        if (webView != null) {
+            viewModel.pollDynamicTranslation()
+        }
+    }
+}
 
     // ═══ عرض لقطة الشاشة تلقائياً ═══
     LaunchedEffect(screenshotPath) {
@@ -446,9 +459,17 @@ fun BrowserScreen(
                                     url: String?
                                 ) {
                                     viewModel.setLoading(false)
-                                    if (!url.isNullOrBlank()) viewModel.loadUrl(url)
-                                    viewModel.updateNavigation(canGoBack(), canGoForward())
-                                    viewModel.saveToHistory()
+
+                                       if (!url.isNullOrBlank()) {
+                                        viewModel.loadUrl(url)
+                                    }
+
+                                      viewModel.updateNavigation(canGoBack(), canGoForward())
+                                       viewModel.saveToHistory()
+
+                                         // إذا كانت الترجمة مفعلة قبل إعادة تحميل الصفحة،
+                                         // سيعاد تجهيز المراقب بعد اكتمال الصفحة.
+                                        viewModel.onPageFinishedForTranslation()
                                 }
                             }
 
