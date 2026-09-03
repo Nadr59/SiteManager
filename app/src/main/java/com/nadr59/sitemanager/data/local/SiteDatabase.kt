@@ -14,9 +14,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BrowserHistory::class,
         BrowserBookmark::class,
         TranslationCache::class,
-        PageNote::class
+        PageNote::class,
+        SavedPage::class           // ← جديد
     ],
-    version = 4,
+    version = 5,                   // ← من 4 إلى 5
     exportSchema = false
 )
 abstract class SiteDatabase : RoomDatabase() {
@@ -52,8 +53,14 @@ abstract class SiteDatabase : RoomDatabase() {
                         FOREIGN KEY (siteId) REFERENCES sites(id) ON DELETE CASCADE
                     )
                 """.trimIndent())
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_site_analyses_siteId ON site_analyses(siteId)")
-                db.execSQL("UPDATE sites SET createdAt = ${System.currentTimeMillis()} WHERE createdAt = 0")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_site_analyses_siteId " +
+                    "ON site_analyses(siteId)"
+                )
+                db.execSQL(
+                    "UPDATE sites SET createdAt = ${System.currentTimeMillis()} " +
+                    "WHERE createdAt = 0"
+                )
             }
         }
 
@@ -104,6 +111,26 @@ abstract class SiteDatabase : RoomDatabase() {
             }
         }
 
+        // ═══ Migration جديدة: إضافة جدول الصفحات المحفوظة ═══
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS saved_pages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        url TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        translatedContent TEXT,
+                        imageUrls TEXT NOT NULL DEFAULT '[]',
+                        language TEXT NOT NULL DEFAULT 'unknown',
+                        isTranslated INTEGER NOT NULL DEFAULT 0,
+                        savedAt INTEGER NOT NULL DEFAULT 0,
+                        siteId INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): SiteDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -111,7 +138,12 @@ abstract class SiteDatabase : RoomDatabase() {
                     SiteDatabase::class.java,
                     "site_manager_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5    // ← إضافة Migration الجديدة
+                    )
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
