@@ -1,4 +1,4 @@
- package com.nadr59.sitemanager.ui.screens
+package com.nadr59.sitemanager.ui.screens
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -10,7 +10,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,24 +78,28 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberLazyListState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
+import com.nadr59.sitemanager.data.local.BrowserBookmark
+import com.nadr59.sitemanager.data.local.BrowserHistory
 import com.nadr59.sitemanager.data.local.PageNote
 import com.nadr59.sitemanager.viewmodel.AiMessage
 import com.nadr59.sitemanager.viewmodel.BrowserViewModel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+
+// ═══════════════════════════════════════════════════════════
+// الشاشة الرئيسية
+// ═══════════════════════════════════════════════════════════
 
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,10 +121,10 @@ fun BrowserScreen(
     val pageNotes by viewModel.pageNotes.collectAsState()
     val hasNotes by viewModel.hasNotes.collectAsState()
     val screenshotPath by viewModel.screenshotPath.collectAsState()
+    val history by viewModel.browserHistory.collectAsState(initial = emptyList())
+    val bookmarks by viewModel.bookmarks.collectAsState(initial = emptyList())
 
-    // ═══ WebView محفوظ بشكل ثابت ═══
     var webView by remember { mutableStateOf<WebView?>(null) }
-
     var showMenu by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var showBookmarks by remember { mutableStateOf(false) }
@@ -130,23 +133,15 @@ fun BrowserScreen(
     var showNotesSheet by remember { mutableStateOf(false) }
     var showScreenshot by remember { mutableStateOf(false) }
 
-    val history by viewModel.browserHistory.collectAsState(initial = emptyList())
-    val bookmarks by viewModel.bookmarks.collectAsState(initial = emptyList())
-
     LaunchedEffect(siteId) {
         if (siteId > 0) viewModel.loadSite(siteId)
     }
 
-    // ═══════════════════════════════════════════
-    // تنفيذ JavaScript - المُصلَح
-    // ═══════════════════════════════════════════
+    // ═══ تنفيذ JavaScript ═══
     LaunchedEffect(pendingJs) {
         val script = pendingJs ?: return@LaunchedEffect
         val wv = webView ?: return@LaunchedEffect
-
-        // تأخير بسيط للتأكد من جاهزية WebView
         delay(100)
-
         wv.post {
             wv.evaluateJavascript(script) { result ->
                 viewModel.onJsExecuted()
@@ -244,7 +239,8 @@ fun BrowserScreen(
                                             Icons.Default.Summarize,
                                             null,
                                             Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.primary
+                                            tint = MaterialTheme
+                                                .colorScheme.primary
                                         )
                                         Spacer(Modifier.width(8.dp))
                                         Text("ملخص ذكي")
@@ -267,7 +263,8 @@ fun BrowserScreen(
                                             Icons.Default.AutoAwesome,
                                             null,
                                             Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.tertiary
+                                            tint = MaterialTheme
+                                                .colorScheme.tertiary
                                         )
                                         Spacer(Modifier.width(8.dp))
                                         Text("مساعد AI")
@@ -457,9 +454,6 @@ fun BrowserScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ═══════════════════════════════════════
-            // WebView - المُصلَح
-            // ═══════════════════════════════════════
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
@@ -475,7 +469,6 @@ fun BrowserScreen(
                             defaultTextEncodingName = "UTF-8"
                             allowFileAccess = true
                             loadsImagesAutomatically = true
-                            // ═══ مهم للـ JS ═══
                             javaScriptCanOpenWindowsAutomatically = true
                         }
 
@@ -526,15 +519,11 @@ fun BrowserScreen(
                     }
                 },
                 update = { view ->
-                    // ═══ حفظ مرجع WebView ═══
                     webView = view
-
-                    // ═══ تحميل الرابط فقط إذا تغيّر ═══
                     val currentUrl = view.url
                     val targetUrl = uiState.url
                     if (
                         targetUrl.isNotBlank() &&
-                        currentUrl != targetUrl &&
                         currentUrl == null
                     ) {
                         view.loadUrl(targetUrl)
@@ -626,7 +615,7 @@ fun BrowserScreen(
 
     // ═══ ورقة الترجمة ═══
     if (uiState.showTranslationSheet) {
-        TranslationBottomSheet(
+        BrowserTranslationSheet(
             currentLanguage = uiState.targetLanguage,
             onLanguageSelected = { lang ->
                 viewModel.setTargetLanguage(lang)
@@ -642,6 +631,7 @@ fun BrowserScreen(
         )
     }
 
+    // ═══ ورقة التاريخ ═══
     if (showHistory) {
         BrowserHistorySheet(
             history = history,
@@ -649,12 +639,15 @@ fun BrowserScreen(
                 webView?.loadUrl(item.url)
                 showHistory = false
             },
-            onDelete = { item -> viewModel.deleteHistory(item.id) },
+            onDelete = { item ->
+                viewModel.deleteHistory(item.id)
+            },
             onClearAll = { viewModel.clearAllHistory() },
             onDismiss = { showHistory = false }
         )
     }
 
+    // ═══ ورقة الإشارات ═══
     if (showBookmarks) {
         BrowserBookmarksSheet(
             bookmarks = bookmarks,
@@ -662,13 +655,16 @@ fun BrowserScreen(
                 webView?.loadUrl(item.url)
                 showBookmarks = false
             },
-            onDelete = { item -> viewModel.deleteBookmark(item.id) },
+            onDelete = { item ->
+                viewModel.deleteBookmark(item.id)
+            },
             onDismiss = { showBookmarks = false }
         )
     }
 
+    // ═══ ورقة الملخص ═══
     if (showSummarySheet) {
-        SummaryBottomSheet(
+        BrowserSummarySheet(
             summary = pageSummary,
             isLoading = isSummarizing,
             pageTitle = uiState.title,
@@ -688,19 +684,20 @@ fun BrowserScreen(
         )
     }
 
+    // ═══ ورقة مساعد AI ═══
     if (showAiChat) {
-        AiChatBottomSheet(
+        BrowserAiChatSheet(
             messages = aiMessages,
             isThinking = isAiThinking,
-            pageTitle = uiState.title,
             onSendMessage = { viewModel.askAiAboutPage(it) },
             onClear = { viewModel.clearAiMessages() },
             onDismiss = { showAiChat = false }
         )
     }
 
+    // ═══ ورقة الملاحظات ═══
     if (showNotesSheet) {
-        PageNotesBottomSheet(
+        BrowserNotesSheet(
             notes = pageNotes,
             pageTitle = uiState.title,
             onAddNote = { viewModel.addNote(it) },
@@ -712,17 +709,17 @@ fun BrowserScreen(
         )
     }
 
+    // ═══ ورقة لقطة الشاشة ═══
     if (showScreenshot && screenshotPath != null) {
-        ScreenshotDialog(
+        BrowserScreenshotSheet(
             imagePath = screenshotPath!!,
             onShare = {
                 val file = java.io.File(screenshotPath!!)
-                val uri = androidx.core.content.FileProvider
-                    .getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        file
-                    )
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "image/png"
                     putExtra(Intent.EXTRA_STREAM, uri)
@@ -739,12 +736,14 @@ fun BrowserScreen(
         )
     }
 }
-// ═══════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
 // ورقة الترجمة
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TranslationBottomSheet(
+private fun BrowserTranslationSheet(
     currentLanguage: String,
     onLanguageSelected: (String) -> Unit,
     onTranslatePage: () -> Unit,
@@ -797,11 +796,10 @@ fun TranslationBottomSheet(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            // ═══ قائمة اللغات ═══
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp),
+                    .height(220.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(languages) { (code, name) ->
@@ -850,7 +848,6 @@ fun TranslationBottomSheet(
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
-            // ═══ أزرار الترجمة ═══
             Button(
                 onClick = {
                     onTranslatePage()
@@ -859,11 +856,7 @@ fun TranslationBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(
-                    Icons.Default.Translate,
-                    null,
-                    Modifier.size(18.dp)
-                )
+                Icon(Icons.Default.Translate, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("ترجمة الصفحة كاملة")
             }
@@ -883,15 +876,16 @@ fun TranslationBottomSheet(
     }
 }
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // ورقة التاريخ
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BrowserHistorySheet(
-    history: List<com.nadr59.sitemanager.data.local.BrowserHistory>,
-    onSelect: (com.nadr59.sitemanager.data.local.BrowserHistory) -> Unit,
-    onDelete: (com.nadr59.sitemanager.data.local.BrowserHistory) -> Unit,
+private fun BrowserHistorySheet(
+    history: List<BrowserHistory>,
+    onSelect: (BrowserHistory) -> Unit,
+    onDelete: (BrowserHistory) -> Unit,
     onClearAll: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -944,7 +938,7 @@ fun BrowserHistorySheet(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(
-                        history,
+                        items = history,
                         key = { it.id }
                     ) { item ->
                         Surface(
@@ -993,21 +987,21 @@ fun BrowserHistorySheet(
                     }
                 }
             }
-
             Spacer(Modifier.height(32.dp))
         }
     }
 }
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // ورقة الإشارات
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BrowserBookmarksSheet(
-    bookmarks: List<com.nadr59.sitemanager.data.local.BrowserBookmark>,
-    onSelect: (com.nadr59.sitemanager.data.local.BrowserBookmark) -> Unit,
-    onDelete: (com.nadr59.sitemanager.data.local.BrowserBookmark) -> Unit,
+private fun BrowserBookmarksSheet(
+    bookmarks: List<BrowserBookmark>,
+    onSelect: (BrowserBookmark) -> Unit,
+    onDelete: (BrowserBookmark) -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -1045,7 +1039,7 @@ fun BrowserBookmarksSheet(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     items(
-                        bookmarks,
+                        items = bookmarks,
                         key = { it.id }
                     ) { item ->
                         Surface(
@@ -1100,18 +1094,18 @@ fun BrowserBookmarksSheet(
                     }
                 }
             }
-
             Spacer(Modifier.height(32.dp))
         }
     }
 }
 
-// ═══════════════════════════════════════════════
-// ورقة الملخص الذكي
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// ورقة الملخص
+// ═══════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SummaryBottomSheet(
+private fun BrowserSummarySheet(
     summary: String?,
     isLoading: Boolean,
     pageTitle: String,
@@ -1177,13 +1171,11 @@ fun SummaryBottomSheet(
                         Spacer(Modifier.height(16.dp))
                         Text(
                             "جارٍ تلخيص الصفحة...",
-                            color = MaterialTheme.colorScheme
-                                .onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
                     }
                 }
-
                 summary != null -> {
                     Text(
                         text = summary,
@@ -1191,7 +1183,6 @@ fun SummaryBottomSheet(
                         lineHeight = 24.sp
                     )
                 }
-
                 else -> {
                     Text(
                         "لا يوجد ملخص متاح",
@@ -1206,15 +1197,15 @@ fun SummaryBottomSheet(
     }
 }
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // ورقة مساعد AI
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AiChatBottomSheet(
+private fun BrowserAiChatSheet(
     messages: List<AiMessage>,
     isThinking: Boolean,
-    pageTitle: String,
     onSendMessage: (String) -> Unit,
     onClear: () -> Unit,
     onDismiss: () -> Unit
@@ -1264,8 +1255,7 @@ fun AiChatBottomSheet(
                         Text(
                             "اسأل عن محتوى هذه الصفحة",
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme
-                                .onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -1280,9 +1270,7 @@ fun AiChatBottomSheet(
                 }
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             if (messages.isEmpty()) {
                 val quickQuestions = listOf(
@@ -1300,9 +1288,7 @@ fun AiChatBottomSheet(
                     )
                     quickQuestions.forEach { q ->
                         Surface(
-                            onClick = {
-                                onSendMessage(q)
-                            },
+                            onClick = { onSendMessage(q) },
                             shape = RoundedCornerShape(20.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier
@@ -1332,7 +1318,7 @@ fun AiChatBottomSheet(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(messages) { message ->
-                        ChatMessageBubble(message = message)
+                        AiMessageBubble(message = message)
                     }
                     if (isThinking) {
                         item {
@@ -1415,7 +1401,7 @@ fun AiChatBottomSheet(
 }
 
 @Composable
-private fun ChatMessageBubble(message: AiMessage) {
+private fun AiMessageBubble(message: AiMessage) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (message.isUser)
@@ -1458,12 +1444,13 @@ private fun ChatMessageBubble(message: AiMessage) {
     }
 }
 
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // ورقة الملاحظات
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PageNotesBottomSheet(
+private fun BrowserNotesSheet(
     notes: List<PageNote>,
     pageTitle: String,
     onAddNote: (String) -> Unit,
@@ -1502,8 +1489,7 @@ fun PageNotesBottomSheet(
                         Text(
                             pageTitle,
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme
-                                .onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1516,9 +1502,7 @@ fun PageNotesBottomSheet(
                 )
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 12.dp)
-            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
             OutlinedTextField(
                 value = newNoteText,
@@ -1562,28 +1546,28 @@ fun PageNotesBottomSheet(
                         Spacer(Modifier.height(8.dp))
                         Text(
                             "لا توجد ملاحظات بعد",
-                            color = MaterialTheme.colorScheme
-                                .onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.height(300.dp),
+                    modifier = Modifier.height(280.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(notes, key = { it.id }) { note ->
+                    items(
+                        items = notes,
+                        key = { it.id }
+                    ) { note ->
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme
-                                    .colorScheme.surfaceVariant
+                                containerColor = MaterialTheme.colorScheme
+                                    .surfaceVariant
                             )
                         ) {
                             if (editingNote?.id == note.id) {
-                                Column(
-                                    modifier = Modifier.padding(12.dp)
-                                ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
                                     OutlinedTextField(
                                         value = editText,
                                         onValueChange = { editText = it },
@@ -1593,20 +1577,15 @@ fun PageNotesBottomSheet(
                                     )
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement =
-                                            Arrangement.End
+                                        horizontalArrangement = Arrangement.End
                                     ) {
                                         TextButton(
                                             onClick = { editingNote = null }
-                                        ) {
-                                            Text("إلغاء")
-                                        }
+                                        ) { Text("إلغاء") }
                                         Button(onClick = {
                                             onUpdateNote(note, editText)
                                             editingNote = null
-                                        }) {
-                                            Text("حفظ")
-                                        }
+                                        }) { Text("حفظ") }
                                     }
                                 }
                             } else {
@@ -1632,23 +1611,20 @@ fun PageNotesBottomSheet(
                                                 Icons.Default.Edit,
                                                 null,
                                                 Modifier.size(14.dp),
-                                                tint = MaterialTheme
-                                                    .colorScheme
+                                                tint = MaterialTheme.colorScheme
                                                     .onSurfaceVariant
                                             )
                                         }
                                         IconButton(
-                                            onClick = {
-                                                onDeleteNote(note.id)
-                                            },
+                                            onClick = { onDeleteNote(note.id) },
                                             modifier = Modifier.size(28.dp)
                                         ) {
                                             Icon(
                                                 Icons.Default.Delete,
                                                 null,
                                                 Modifier.size(14.dp),
-                                                tint = MaterialTheme
-                                                    .colorScheme.error
+                                                tint = MaterialTheme.colorScheme
+                                                    .error
                                             )
                                         }
                                     }
@@ -1664,12 +1640,13 @@ fun PageNotesBottomSheet(
     }
 }
 
-// ═══════════════════════════════════════════════
-// حوار لقطة الشاشة
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// ورقة لقطة الشاشة
+// ═══════════════════════════════════════════════════════════
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScreenshotDialog(
+private fun BrowserScreenshotSheet(
     imagePath: String,
     onShare: () -> Unit,
     onDismiss: () -> Unit
@@ -1725,11 +1702,7 @@ fun ScreenshotDialog(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Share,
-                        null,
-                        Modifier.size(18.dp)
-                    )
+                    Icon(Icons.Default.Share, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("مشاركة")
                 }
