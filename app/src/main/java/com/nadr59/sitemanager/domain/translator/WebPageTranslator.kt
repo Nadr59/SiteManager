@@ -327,6 +327,92 @@ class WebPageTranslator @Inject constructor() {
      * textContent يستخدم بدلاً من innerHTML حتى لا يتم
      * تنفيذ HTML قادم من خدمة الترجمة.
      */
+     fun buildInstallDynamicObserverScript(): String {
+    return """
+        (function() {
+            try {
+                if (window.__siteManagerTranslationObserver) {
+                    window.__siteManagerTranslationObserver.disconnect();
+                }
+
+                window.__siteManagerTranslationQueue = [];
+
+                var counter = window.__siteManagerTranslationCounter || 100000;
+
+                function isIgnored(element) {
+                    if (!element) return true;
+                    var tag = element.tagName;
+                    return tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' ||
+                           tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT';
+                }
+
+                function isVisible(element) {
+                    if (!element) return false;
+                    var style = window.getComputedStyle(element);
+                    return style.display !== 'none' &&
+                           style.visibility !== 'hidden' &&
+                           element.offsetParent !== null;
+                }
+
+                function collectElement(element) {
+                    if (!element) return;
+
+                    if (element.nodeType === Node.TEXT_NODE) {
+                        var parent = element.parentElement;
+                        if (!parent || isIgnored(parent) || !isVisible(parent)) return;
+
+                        var text = element.textContent.trim();
+                        if (text.length <= 1) return;
+
+                        var wrapper = document.createElement('span');
+                        var id = 'ai_dynamic_node_' + counter++;
+
+                        wrapper.setAttribute('data-ai-translate-id', id);
+                        wrapper.setAttribute('data-ai-translate-original', text);
+
+                        element.parentNode.insertBefore(wrapper, element);
+                        wrapper.appendChild(element);
+
+                        window.__siteManagerTranslationQueue.push({
+                            id: id,
+                            text: text
+                        });
+                        return;
+                    }
+
+                    if (element.nodeType !== Node.ELEMENT_NODE) return;
+                    if (isIgnored(element)) return;
+
+                    var children = Array.from(element.childNodes);
+                    children.forEach(function(child) {
+                        collectElement(child);
+                    });
+                }
+
+                window.__siteManagerTranslationObserver = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        mutation.addedNodes.forEach(function(node) {
+                            collectElement(node);
+                        });
+                    });
+                });
+
+                if (document.body) {
+                    window.__siteManagerTranslationObserver.observe(document.body, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+
+                window.__siteManagerTranslationCounter = counter;
+
+                return 'observer_installed';
+            } catch (e) {
+                return 'observer_error';
+            }
+        })();
+    """.trimIndent()
+     }
     fun buildReplaceScript(
         translations: List<TranslatedNode>
     ): String {
