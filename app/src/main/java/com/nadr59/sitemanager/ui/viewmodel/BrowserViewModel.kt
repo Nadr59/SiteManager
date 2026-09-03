@@ -86,102 +86,17 @@ class BrowserViewModel @Inject constructor(
     private var currentSiteId = 0
     private var currentPageContent = ""
     private var dynamicTranslationPolling = false
-    private var pendingJavascriptPurpose: JavascriptPurpose =
-    JavascriptPurpose.None
+    private var pendingJavascriptPurpose: JavascriptPurpose = JavascriptPurpose.None
 
-private enum class JavascriptPurpose {
-    None,
-    InitialExtraction,
-    DynamicPolling,
-    Replace
-}
-    
-    fun pollDynamicTranslation() {
-    if (!_uiState.value.isTranslationMode) return
-    if (_uiState.value.isTranslating) return
-    if (_pendingJs.value != null) return
-    if (dynamicTranslationPolling) return
-
-    dynamicTranslationPolling = true
-    pendingJavascriptPurpose = JavascriptPurpose.DynamicPolling
-    _pendingJs.value = translationCoordinator.pollDynamicNodesScript()
+    private enum class JavascriptPurpose {
+        None,
+        InitialExtraction,
+        DynamicPolling,
+        Replace
     }
-    fun onDynamicJavascriptResult(rawResult: String?) {
-    dynamicTranslationPolling = false
-
-    when (val result = translationCoordinator.decodeAndClassify(rawResult)) {
-        is JavascriptResult.Nodes -> {
-            if (result.nodes.isNotEmpty()) {
-                handleDynamicNodes(result.nodes)
-            }
-        }
-
-        else -> Unit
-    }
-    }
-
-    private fun handleDynamicNodes(nodes: List<PageTextNode>) {
-    if (nodes.isEmpty()) return
-    if (_uiState.value.isTranslating) return
-
-    _uiState.update {
-        it.copy(
-            isTranslating = true,
-            translationProgress = 0f,
-            error = null
-        )
-    }
-
-    viewModelScope.launch {
-        val result = translationCoordinator.translatePage(
-            nodes = nodes,
-            targetLanguage = _uiState.value.targetLanguage,
-            onProgress = { progress ->
-                _uiState.update {
-                    it.copy(
-                        translationProgress = progress.coerceIn(0f, 1f)
-                    )
-                }
-            }
-        )
-
-        result.fold(
-            onSuccess = { translated ->
-                if (translated.isNotEmpty()) {
-                    _translatedNodes.update { existing ->
-                        existing + translated
-                    }
-
-                    _pendingJs.value =
-                        translationCoordinator.replaceScript(translated)
-                }
-
-                _uiState.update {
-                    it.copy(
-                        isTranslating = false,
-                        translationProgress = 1f
-                    )
-                }
-            },
-
-            onFailure = { error ->
-                _uiState.update {
-                    it.copy(
-                        isTranslating = false,
-                        translationProgress = 0f,
-                        error = "فشل ترجمة المحتوى الجديد: ${
-                            error.message ?: "خطأ غير معروف"
-                        }"
-                    )
-                }
-            }
-        )
-    }
-    }
-    
 
     fun onJsExecuted() {
-    _pendingJs.value = null
+        _pendingJs.value = null
     }
 
     fun loadSite(siteId: Int) {
@@ -232,13 +147,27 @@ private enum class JavascriptPurpose {
 
     fun hideTranslationSheet() {
         _uiState.update { it.copy(showTranslationSheet = false) }
-        fun onPageFinishedForTranslation() {
-    // إذا كانت الترجمة مفعّلة قبل إعادة التحميل،
-    // أعد تفعيل المراقب بعد اكتمال الصفحة
-    if (_uiState.value.isTranslationMode) {
-        _pendingJs.value = translationCoordinator.buildInstallDynamicObserverScript()
     }
+
+    // ═══ دالة جديدة: عند انتهاء تحميل الصفحة ═══
+    fun onPageFinishedForTranslation() {
+        // إذا كانت الترجمة مفعّلة قبل إعادة التحميل،
+        // أعد تفعيل المراقب بعد اكتمال الصفحة
+        if (_uiState.value.isTranslationMode) {
+            _pendingJs.value = translationCoordinator.installDynamicObserverScript()
         }
+    }
+
+    // ═══ دالة جديدة: استعلام عن المحتوى الديناميكي ═══
+    fun pollDynamicTranslation() {
+        if (!_uiState.value.isTranslationMode) return
+        if (_uiState.value.isTranslating) return
+        if (_pendingJs.value != null) return
+        if (dynamicTranslationPolling) return
+
+        dynamicTranslationPolling = true
+        pendingJavascriptPurpose = JavascriptPurpose.DynamicPolling
+        _pendingJs.value = translationCoordinator.pollDynamicNodesScript()
     }
 
     // ═══ لقطة الشاشة ═══
@@ -283,17 +212,19 @@ private enum class JavascriptPurpose {
                 currentPageContent = content.rawContent
 
                 val prompt = """أنت مساعد ذكي مختصر.
+
 لخّص هذه الصفحة في نقاط واضحة:
 الرابط: ${content.url}
 العنوان: ${content.title ?: ""}
 الوصف: ${content.description ?: ""}
 المحتوى:
 ${content.rawContent.take(3000)}
+
 قواعد:
-- لخّص في 5 نقاط رئيسية كحد أقصى
-- كن مختصراً ومفيداً
-- أجب بالعربية
-- استخدم نقاط (•) للتنظيم"""
+• لخّص في 5 نقاط رئيسية كحد أقصى
+• كن مختصراً ومفيداً
+• أجب بالعربية
+• استخدم نقاط (•) للتنظيم"""
 
                 val response = apiClient.ask(prompt)
                 if (response.success) {
@@ -333,11 +264,14 @@ ${content.rawContent.take(3000)}
                 }
 
                 val prompt = """أنت مساعد ذكي يساعد المستخدم في فهم محتوى صفحة ويب.
+
 الصفحة الحالية:
 - الرابط: $url
 - العنوان: $title
 ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.take(3000)}" else ""}
+
 سؤال المستخدم: $question
+
 أجب بشكل مختصر ومفيد بالعربية."""
 
                 val response = apiClient.ask(prompt)
@@ -443,73 +377,79 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
 
     private fun buildEnhancedReaderModeScript(): String {
         return """
-        (function() {
-            var removeSelectors = [
-                'header:not(article header)', 'footer', 'nav', 'aside',
-                '.ad', '.ads', '.advertisement', '.banner',
-                '.sidebar', '.widget', '.popup', '.modal',
-                '.cookie-notice', '.newsletter-signup',
-                '[class*="ad-"]', '[id*="ad-"]',
-                '[class*="social"]', '[class*="share"]',
-                '[class*="related"]', '[class*="recommended"]',
-                'script', 'style', 'iframe',
-                '.comments', '#comments',
-                '.sticky', '[class*="sticky"]'
-            ];
-            removeSelectors.forEach(function(s) {
-                try { document.querySelectorAll(s).forEach(function(el) { el.remove(); }); } catch(e) {}
-            });
-            var mainContent =
-                document.querySelector('article') ||
-                document.querySelector('main') ||
-                document.querySelector('[role="main"]') ||
-                document.querySelector('.content') ||
-                document.querySelector('.post-content') ||
-                document.querySelector('.entry-content') ||
-                document.body;
-            var readerContainer = document.createElement('div');
-            readerContainer.id = 'reader-mode-container';
-            readerContainer.innerHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
-            document.body.innerHTML = '';
-            document.body.appendChild(readerContainer);
-            var style = document.createElement('style');
-            style.textContent = `
-                * { box-sizing: border-box; }
-                body { background: #FAFAFA !important; margin: 0 !important; padding: 0 !important; }
-                #reader-mode-container {
-                    max-width: 720px !important; margin: 0 auto !important;
-                    padding: 24px 20px 48px !important;
-                    font-family: 'Georgia', serif !important; font-size: 19px !important;
-                    line-height: 1.9 !important; color: #2C2C2C !important;
-                    background: #FAFAFA !important;
-                }
-                #reader-mode-container h1, #reader-mode-container h2, #reader-mode-container h3 {
-                    font-family: sans-serif !important; color: #1A1A1A !important;
-                    margin-top: 1.5em !important; line-height: 1.4 !important;
-                }
-                #reader-mode-container h1 { font-size: 28px !important; }
-                #reader-mode-container h2 { font-size: 23px !important; }
-                #reader-mode-container p { margin-bottom: 1.2em !important; }
-                #reader-mode-container img {
-                    max-width: 100% !important; height: auto !important;
-                    border-radius: 8px !important; margin: 16px 0 !important;
-                }
-                #reader-mode-container a { color: #1565C0 !important; text-decoration: underline !important; }
-                #reader-mode-container blockquote {
-                    border-right: 4px solid #1565C0 !important; border-left: none !important;
-                    padding: 8px 16px !important; margin: 16px 0 !important;
-                    background: #F0F4FF !important; border-radius: 0 8px 8px 0 !important;
-                }
-                #reader-mode-container pre, #reader-mode-container code {
-                    background: #F5F5F5 !important; border-radius: 4px !important;
-                    padding: 2px 6px !important; font-family: monospace !important;
-                }
-                #reader-mode-container pre { padding: 16px !important; overflow-x: auto !important; }
-            `;
-            document.head.appendChild(style);
-            document.documentElement.setAttribute('dir', 'auto');
-            return 'reader_mode_enabled';
-        })();
+(function() {
+    var removeSelectors = [
+        'header:not(article header)', 'footer', 'nav', 'aside',
+        '.ad', '.ads', '.advertisement', '.banner',
+        '.sidebar', '.widget', '.popup', '.modal',
+        '.cookie-notice', '.newsletter-signup',
+        '[class*="ad-"]', '[id*="ad-"]',
+        '[class*="social"]', '[class*="share"]',
+        '[class*="related"]', '[class*="recommended"]',
+        'script', 'style', 'iframe',
+        '.comments', '#comments',
+        '.sticky', '[class*="sticky"]'
+    ];
+    
+    removeSelectors.forEach(function(s) {
+        try { document.querySelectorAll(s).forEach(function(el) { el.remove(); }); } catch(e) {}
+    });
+    
+    var mainContent =
+        document.querySelector('article') ||
+        document.querySelector('main') ||
+        document.querySelector('[role="main"]') ||
+        document.querySelector('.content') ||
+        document.querySelector('.post-content') ||
+        document.querySelector('.entry-content') ||
+        document.body;
+    
+    var readerContainer = document.createElement('div');
+    readerContainer.id = 'reader-mode-container';
+    readerContainer.innerHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
+    
+    document.body.innerHTML = '';
+    document.body.appendChild(readerContainer);
+    
+    var style = document.createElement('style');
+    style.textContent = `
+        * { box-sizing: border-box; }
+        body { background: #FAFAFA !important; margin: 0 !important; padding: 0 !important; }
+        #reader-mode-container {
+            max-width: 720px !important; margin: 0 auto !important;
+            padding: 24px 20px 48px !important;
+            font-family: 'Georgia', serif !important; font-size: 19px !important;
+            line-height: 1.9 !important; color: #2C2C2C !important;
+            background: #FAFAFA !important;
+        }
+        #reader-mode-container h1, #reader-mode-container h2, #reader-mode-container h3 {
+            font-family: sans-serif !important; color: #1A1A1A !important;
+            margin-top: 1.5em !important; line-height: 1.4 !important;
+        }
+        #reader-mode-container h1 { font-size: 28px !important; }
+        #reader-mode-container h2 { font-size: 23px !important; }
+        #reader-mode-container p { margin-bottom: 1.2em !important; }
+        #reader-mode-container img {
+            max-width: 100% !important; height: auto !important;
+            border-radius: 8px !important; margin: 16px 0 !important;
+        }
+        #reader-mode-container a { color: #1565C0 !important; text-decoration: underline !important; }
+        #reader-mode-container blockquote {
+            border-right: 4px solid #1565C0 !important; border-left: none !important;
+            padding: 8px 16px !important; margin: 16px 0 !important;
+            background: #F0F4FF !important; border-radius: 0 8px 8px 0 !important;
+        }
+        #reader-mode-container pre, #reader-mode-container code {
+            background: #F5F5F5 !important; border-radius: 4px !important;
+            padding: 2px 6px !important; font-family: monospace !important;
+        }
+        #reader-mode-container pre { padding: 16px !important; overflow-x: auto !important; }
+    `;
+    document.head.appendChild(style);
+    document.documentElement.setAttribute('dir', 'auto');
+    
+    return 'reader_mode_enabled';
+})();
         """.trimIndent()
     }
 
@@ -521,67 +461,66 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         }
         _extractedNodes.value = emptyList()
         _translatedNodes.value = emptyList()
+        pendingJavascriptPurpose = JavascriptPurpose.InitialExtraction
         _pendingJs.value = translationCoordinator.extractScript()
-      
-         pendingJavascriptPurpose = JavascriptPurpose.InitialExtraction
     }
 
     fun onJavascriptResult(rawResult: String?) {
-    when (pendingJavascriptPurpose) {
+        when (pendingJavascriptPurpose) {
 
-        JavascriptPurpose.DynamicPolling -> {
-            dynamicTranslationPolling = false
+            JavascriptPurpose.DynamicPolling -> {
+                dynamicTranslationPolling = false
 
-            when (
-                val result =
-                    translationCoordinator.decodeAndClassify(rawResult)
-            ) {
-                is JavascriptResult.Nodes -> {
-                    if (result.nodes.isNotEmpty()) {
-                        handleDynamicNodes(result.nodes)
+                when (
+                    val result =
+                        translationCoordinator.decodeAndClassify(rawResult)
+                ) {
+                    is JavascriptResult.Nodes -> {
+                        if (result.nodes.isNotEmpty()) {
+                            handleDynamicNodes(result.nodes)
+                        }
                     }
-                }
 
-                else -> Unit
+                    else -> Unit
+                }
+            }
+
+            JavascriptPurpose.InitialExtraction -> {
+                when (
+                    val result =
+                        translationCoordinator.decodeAndClassify(rawResult)
+                ) {
+                    is JavascriptResult.Nodes -> {
+                        handleExtractedNodes(result.nodes)
+                    }
+
+                    is JavascriptResult.Selection -> {
+                        handleSelectedText(result.text)
+                    }
+
+                    else -> Unit
+                }
+            }
+
+            else -> {
+                when (
+                    val result =
+                        translationCoordinator.decodeAndClassify(rawResult)
+                ) {
+                    is JavascriptResult.Nodes -> {
+                        handleExtractedNodes(result.nodes)
+                    }
+
+                    is JavascriptResult.Selection -> {
+                        handleSelectedText(result.text)
+                    }
+
+                    else -> Unit
+                }
             }
         }
 
-        JavascriptPurpose.InitialExtraction -> {
-            when (
-                val result =
-                    translationCoordinator.decodeAndClassify(rawResult)
-            ) {
-                is JavascriptResult.Nodes -> {
-                    handleExtractedNodes(result.nodes)
-                }
-
-                is JavascriptResult.Selection -> {
-                    handleSelectedText(result.text)
-                }
-
-                else -> Unit
-            }
-        }
-
-        else -> {
-            when (
-                val result =
-                    translationCoordinator.decodeAndClassify(rawResult)
-            ) {
-                is JavascriptResult.Nodes -> {
-                    handleExtractedNodes(result.nodes)
-                }
-
-                is JavascriptResult.Selection -> {
-                    handleSelectedText(result.text)
-                }
-
-                else -> Unit
-            }
-        }
-    }
-
-    pendingJavascriptPurpose = JavascriptPurpose.None
+        pendingJavascriptPurpose = JavascriptPurpose.None
     }
 
     fun onNodesExtracted(jsonString: String) {
@@ -617,6 +556,8 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                     _uiState.update {
                         it.copy(isTranslating = false, isTranslationMode = true, translationProgress = 1f)
                     }
+                    // تفعيل المراقب الديناميكي
+                    _pendingJs.value = translationCoordinator.installDynamicObserverScript()
                 },
                 onFailure = { error ->
                     _uiState.update {
@@ -624,6 +565,65 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                             isTranslating = false,
                             translationProgress = 0f,
                             error = "فشل ترجمة الصفحة: ${error.message ?: "خطأ غير معروف"}"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    private fun handleDynamicNodes(nodes: List<PageTextNode>) {
+        if (nodes.isEmpty()) return
+        if (_uiState.value.isTranslating) return
+
+        _uiState.update {
+            it.copy(
+                isTranslating = true,
+                translationProgress = 0f,
+                error = null
+            )
+        }
+
+        viewModelScope.launch {
+            val result = translationCoordinator.translatePage(
+                nodes = nodes,
+                targetLanguage = _uiState.value.targetLanguage,
+                onProgress = { progress ->
+                    _uiState.update {
+                        it.copy(
+                            translationProgress = progress.coerceIn(0f, 1f)
+                        )
+                    }
+                }
+            )
+
+            result.fold(
+                onSuccess = { translated ->
+                    if (translated.isNotEmpty()) {
+                        _translatedNodes.update { existing ->
+                            existing + translated
+                        }
+
+                        _pendingJs.value =
+                            translationCoordinator.replaceScript(translated)
+                    }
+
+                    _uiState.update {
+                        it.copy(
+                            isTranslating = false,
+                            translationProgress = 1f
+                        )
+                    }
+                },
+
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isTranslating = false,
+                            translationProgress = 0f,
+                            error = "فشل ترجمة المحتوى الجديد: ${
+                                error.message ?: "خطأ غير معروف"
+                            }"
                         )
                     }
                 }
@@ -660,21 +660,15 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     }
 
     fun resetTranslation() {
-    dynamicTranslationPolling = false
-    pendingJavascriptPurpose = JavascriptPurpose.None
+        dynamicTranslationPolling = false
+        pendingJavascriptPurpose = JavascriptPurpose.None
 
-    _uiState.update {
-        it.copy(
-            isTranslationMode = false,
-            isTranslating = false,
-            translationProgress = 0f,
-            error = null
-        )
-    }
-
-    _extractedNodes.value = emptyList()
-    _translatedNodes.value = emptyList()
-    _pendingJs.value = "window.location.reload();"
+        _uiState.update {
+            it.copy(isTranslationMode = false, isTranslating = false, translationProgress = 0f, error = null)
+        }
+        _extractedNodes.value = emptyList()
+        _translatedNodes.value = emptyList()
+        _pendingJs.value = "window.location.reload();"
     }
 
     fun clearError() {
