@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -104,11 +103,11 @@ class BrowserViewModel @Inject constructor(
     private var currentSiteId = 0
     private var currentPageContent = ""
 
-    // ═══ بيانات SmartRead المؤقتة ═══
-    private var smartReadPageContent = ""
-    private var smartReadImageUrls = listOf<String>()
-    private var smartReadDetectedLanguage = "unknown"
-    private var isSmartReadFlow = false  // لتمييز الترجمة العادية عن SmartRead
+    // ═══ متغيرات SmartRead ═══
+    private var isSmartReadFlow = false
+
+    // ═══ تتبع العناصر المترجمة لـ pollDynamicTranslation ═══
+    private val translatedNodeIds = mutableSetOf<String>()
 
     fun onJsExecuted() { _pendingJs.value = null }
 
@@ -131,7 +130,9 @@ class BrowserViewModel @Inject constructor(
         }
     }
 
-    fun loadUrl(url: String) { _uiState.update { it.copy(url = url) } }
+    fun loadUrl(url: String) {
+        _uiState.update { it.copy(url = url) }
+    }
 
     fun updateTitle(title: String) {
         _uiState.update { it.copy(title = title) }
@@ -162,6 +163,72 @@ class BrowserViewModel @Inject constructor(
 
     fun hideTranslationSheet() {
         _uiState.update { it.copy(showTranslationSheet = false) }
+    }
+
+    // ═══════════════════════════════════════
+    // onPageFinishedForTranslation
+    // يُستدعى من WebViewClient.onPageFinished
+    // إذا كان وضع الترجمة مفعلاً، يعيد تطبيق
+    // الترجمة على الصفحة بعد إعادة التحميل
+    // ═══════════════════════════════════════
+    fun onPageFinishedForTranslation() {
+        val state = _uiState.value
+        // إذا كانت الترجمة مفعلة وعندنا عقد مترجمة → أعد تطبيقها
+        if (state.isTranslationMode && _translatedNodes.value.isNotEmpty()) {
+            _pendingJs.value = pageTranslator.buildReplaceScript(_translatedNodes.value)
+        }
+        // إذا كان SmartRead مفعلاً → أعد تطبيق Reader Mode + الترجمة
+        if (state.isSmartReadMode && _translatedNodes.value.isNotEmpty()) {
+            _pendingJs.value = buildSmartReadReaderScript()
+        }
+    }
+
+    // ═══════════════════════════════════════
+    // pollDynamicTranslation
+    // يُستدعى كل 2 ثانية عند تفعيل الترجمة
+    // يبحث عن عناصر جديدة لم تُترجم بعد
+    // (للمواقع التي تحمّل محتوى ديناميكياً)
+    // ═══════════════════════════════════════
+    fun pollDynamicTranslation() {
+        val state = _uiState.value
+        // فقط إذا كانت الترجمة مفعلة وغير جارية حالياً
+        if (!state.isTranslationMode || state.isTranslating) return
+
+        // تنفيذ script يبحث عن عناصر جديدة بدون data-ai-translate-id
+        _pendingJs.value = buildPollScript()
+    }
+
+    /**
+     * Script يبحث عن عناصر نصية جديدة لم تحمل
+     * data-ai-translate-id بعد (محتوى ديناميكي)
+     */
+    private fun buildPollScript(): String {
+        return """
+        (function() {
+            const elements = document.querySelectorAll(
+                'h1,h2,h3,h4,h5,h6,p,li,span,a,td,th,button,label,blockquote'
+            );
+            const newNodes = [];
+            let nodeIndex = Date.now();
+
+            elements.forEach(function(element) {
+                if (!element.hasAttribute('data-ai-translate-id') &&
+                    element.children.length === 0 &&
+                    element.offsetParent !== null) {
+                    const text = element.innerText.trim();
+                    if (text.length > 3) {
+                        const nodeId = 'ai_poll_' + nodeIndex;
+                        element.setAttribute('data-ai-translate-id', nodeId);
+                        newNodes.push({ id: nodeId, text: text });
+                        nodeIndex++;
+                    }
+                }
+            });
+
+            if (newNodes.length === 0) return null;
+            return JSON.stringify(newNodes);
+        })();
+        """.trimIndent()
     }
 
     // ═══════════════════════════════════════
@@ -196,7 +263,7 @@ class BrowserViewModel @Inject constructor(
     fun clearScreenshot() { _screenshotPath.value = null }
 
     // ═══════════════════════════════════════
-    // ملخص الصفحة بالذكاء الاصطناعي
+    // ملخص الصفحة
     // ═══════════════════════════════════════
     fun summarizePage() {
         val url = _uiState.value.url
@@ -243,7 +310,7 @@ ${content.rawContent.take(3000)}
     fun clearSummary() { _pageSummary.value = null }
 
     // ═══════════════════════════════════════
-    // مساعد AI للصفحة
+    // مساعد AI
     // ═══════════════════════════════════════
     fun askAiAboutPage(question: String) {
         if (question.isBlank()) return
@@ -405,24 +472,18 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     }
 
     // ═══════════════════════════════════════
-    // ═══ القراءة الذكية — startSmartRead ═══
+    // القراءة الذكية
     // ═══════════════════════════════════════
-    /**
-     * يبدأ تدفق "قراءة بالعربية":
-     * 1. تطبيق Reader Mode لتنظيف الصفحة
-     * 2. استخراج العقد النصية
-     * 3. ترجمتها إلى العربية
-     * 4. استبدال النصوص في الصفحة
-     */
     fun startSmartRead() {
         val state = _uiState.value
         if (state.isSmartReadMode) {
-            // ═══ إلغاء وضع القراءة الذكية ═══
             resetSmartRead()
             return
         }
 
         isSmartReadFlow = true
+        translatedNodeIds.clear()
+
         _uiState.update {
             it.copy(
                 smartReadStep = SmartReadStep.CLEANING,
@@ -432,30 +493,18 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
             )
         }
         _isReaderMode.value = true
-
-        // الخطوة 1: تطبيق Reader Mode أولاً
-        // بعد تطبيقه، نستخرج العقد في onReaderModeApplied()
         _pendingJs.value = buildSmartReadReaderScript()
     }
 
-    /**
-     * يُستدعى بعد تطبيق Reader Mode في SmartRead
-     * ينتقل إلى مرحلة استخراج النصوص
-     */
     fun onReaderModeApplied() {
         if (!isSmartReadFlow) return
-
-        _uiState.update {
-            it.copy(smartReadStep = SmartReadStep.EXTRACTING)
-        }
-        // الخطوة 2: استخراج العقد بعد تنظيف الصفحة
+        _uiState.update { it.copy(smartReadStep = SmartReadStep.EXTRACTING) }
         _pendingJs.value = pageTranslator.buildExtractScript()
     }
 
     fun resetSmartRead() {
         isSmartReadFlow = false
-        smartReadPageContent = ""
-        smartReadImageUrls = emptyList()
+        translatedNodeIds.clear()
         _isReaderMode.value = false
         _uiState.update {
             it.copy(
@@ -476,6 +525,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     // ═══════════════════════════════════════
     fun startPageTranslation() {
         isSmartReadFlow = false
+        translatedNodeIds.clear()
         _uiState.update {
             it.copy(
                 isTranslating = true,
@@ -487,22 +537,21 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         _pendingJs.value = pageTranslator.buildExtractScript()
     }
 
-    /**
-     * نقطة التقاء SmartRead والترجمة العادية
-     * يُستدعى عند اكتمال استخراج العقد في كلا الحالتين
-     */
     fun onNodesExtracted(jsonString: String) {
         val nodes: List<PageTextNode> = pageTranslator.parseExtractedNodes(jsonString)
+
+        // تصفية العقد التي سبق ترجمتها (لـ pollDynamicTranslation)
+        val newNodes = nodes.filter { it.id !in translatedNodeIds }
         _extractedNodes.value = nodes
 
-        if (nodes.isEmpty()) {
+        if (newNodes.isEmpty()) {
             if (isSmartReadFlow) {
                 _uiState.update {
                     it.copy(
                         smartReadStep = SmartReadStep.DONE,
                         isSmartReadMode = true,
                         isTranslating = false,
-                        error = "لا يوجد نص قابل للترجمة في هذه الصفحة"
+                        error = "لا يوجد نص قابل للترجمة"
                     )
                 }
             } else {
@@ -513,24 +562,35 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
             return
         }
 
-        // تحديث الحالة للترجمة
         _uiState.update {
             it.copy(
                 isTranslating = true,
                 translationProgress = 0f,
-                smartReadStep = if (isSmartReadFlow) SmartReadStep.TRANSLATING else it.smartReadStep
+                smartReadStep = if (isSmartReadFlow)
+                    SmartReadStep.TRANSLATING
+                else
+                    it.smartReadStep
             )
         }
 
         viewModelScope.launch {
             val result = translationRepository.translatePageNodes(
-                nodes = nodes,
+                nodes = newNodes,
                 targetLanguage = _uiState.value.targetLanguage,
-                onProgress = { p -> _uiState.update { it.copy(translationProgress = p) } }
+                onProgress = { p ->
+                    _uiState.update { it.copy(translationProgress = p) }
+                }
             )
             result.fold(
-                onSuccess = { translated: List<TranslatedNode> ->
-                    _translatedNodes.value = translated
+                onSuccess = { translated ->
+                    // تسجيل العقد المترجمة
+                    translated.forEach { translatedNodeIds.add(it.id) }
+
+                    // دمج مع العقد المترجمة السابقة
+                    val allTranslated = (_translatedNodes.value + translated)
+                        .distinctBy { it.id }
+                    _translatedNodes.value = allTranslated
+
                     _pendingJs.value = pageTranslator.buildReplaceScript(translated)
 
                     if (isSmartReadFlow) {
@@ -558,7 +618,9 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                         it.copy(
                             isTranslating = false,
                             smartReadStep = if (isSmartReadFlow)
-                                SmartReadStep.IDLE else it.smartReadStep,
+                                SmartReadStep.IDLE
+                            else
+                                it.smartReadStep,
                             error = "فشل الترجمة: ${e.message}"
                         )
                     }
@@ -587,7 +649,9 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                             pageTranslator.buildReplaceSelectionScript(translated)
                     },
                     onFailure = { e ->
-                        _uiState.update { it.copy(error = "فشل الترجمة: ${e.message}") }
+                        _uiState.update {
+                            it.copy(error = "فشل الترجمة: ${e.message}")
+                        }
                     }
                 )
             }
@@ -596,6 +660,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
 
     fun resetTranslation() {
         isSmartReadFlow = false
+        translatedNodeIds.clear()
         _uiState.update {
             it.copy(
                 isTranslationMode = false,
@@ -609,7 +674,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     }
 
     // ═══════════════════════════════════════
-    // حفظ الصفحة للقراءة لاحقاً
+    // حفظ الصفحة
     // ═══════════════════════════════════════
     fun saveCurrentPage() {
         val state = _uiState.value
@@ -619,20 +684,20 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
 
         viewModelScope.launch {
             try {
-                // جلب المحتوى عبر WebScraper
                 val scraped = webScraper.scrape(state.url)
 
-                // استخراج روابط الصور من المحتوى
-                val imageUrls = extractImageUrls(scraped.rawContent, state.url)
+                val imageUrls = extractImageUrls(scraped.rawContent)
                 val imageUrlsJson = gson.toJson(imageUrls)
 
-                // تحديد النص المترجم إن وجد
-                val translatedContent = if (state.isTranslationMode || state.isSmartReadMode) {
+                val translatedContent = if (
+                    state.isTranslationMode || state.isSmartReadMode
+                ) {
                     buildTranslatedContent(_translatedNodes.value)
                 } else null
 
-                // تحديد اللغة
-                val language = if (state.isTranslationMode || state.isSmartReadMode) {
+                val language = if (
+                    state.isTranslationMode || state.isSmartReadMode
+                ) {
                     "translated_to_${state.targetLanguage}"
                 } else {
                     detectPageLanguage(scraped.rawContent)
@@ -642,7 +707,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                     SavedPage(
                         url = state.url,
                         title = state.title.ifBlank { state.url },
-                        content = scraped.rawContent.take(50000), // حد أقصى معقول
+                        content = scraped.rawContent.take(50000),
                         translatedContent = translatedContent,
                         imageUrls = imageUrlsJson,
                         language = language,
@@ -652,10 +717,7 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
                 )
 
                 _uiState.update {
-                    it.copy(
-                        isSavingPage = false,
-                        isPageSaved = true
-                    )
+                    it.copy(isSavingPage = false, isPageSaved = true)
                 }
             } catch (e: Exception) {
                 _uiState.update {
@@ -671,7 +733,6 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     fun deleteSavedPage(id: Int) {
         viewModelScope.launch {
             browserDao.deleteSavedPage(id)
-            // تحديث حالة الصفحة الحالية إن كانت هي المحذوفة
             checkSavedStatus()
         }
     }
@@ -687,23 +748,23 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
         }
     }
 
-    // ═══ بناء نص مترجم موحد من العقد ═══
     private fun buildTranslatedContent(nodes: List<TranslatedNode>): String? {
         if (nodes.isEmpty()) return null
         return nodes.joinToString("\n") { it.translatedText }
     }
 
-    // ═══ استخراج روابط الصور من المحتوى الخام ═══
-    private fun extractImageUrls(content: String, baseUrl: String): List<String> {
-        val imgRegex = Regex("""<img[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+    private fun extractImageUrls(content: String): List<String> {
+        val imgRegex = Regex(
+            """<img[^>]+src=["']([^"']+)["']""",
+            RegexOption.IGNORE_CASE
+        )
         return imgRegex.findAll(content)
             .map { it.groupValues[1] }
             .filter { it.startsWith("http") }
-            .take(20) // حد أقصى 20 صورة
+            .take(20)
             .toList()
     }
 
-    // ═══ اكتشاف لغة بسيط ═══
     private fun detectPageLanguage(content: String): String {
         val sample = content.take(500)
         return when {
@@ -718,11 +779,6 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
     // ═══════════════════════════════════════
     // JavaScript Scripts
     // ═══════════════════════════════════════
-
-    /**
-     * نسخة Reader Mode المخصصة لـ SmartRead
-     * تُعيد قيمة "smart_reader_ready" عند الاكتمال
-     */
     private fun buildSmartReadReaderScript(): String {
         return """
         (function() {
@@ -741,7 +797,9 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
 
             removeSelectors.forEach(function(s) {
                 try {
-                    document.querySelectorAll(s).forEach(function(el) { el.remove(); });
+                    document.querySelectorAll(s).forEach(function(el) {
+                        el.remove();
+                    });
                 } catch(e) {}
             });
 
@@ -756,49 +814,39 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
 
             var readerContainer = document.createElement('div');
             readerContainer.id = 'smart-reader-container';
-            readerContainer.innerHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
+            readerContainer.innerHTML = mainContent
+                ? mainContent.innerHTML
+                : document.body.innerHTML;
 
             document.body.innerHTML = '';
             document.body.appendChild(readerContainer);
 
             var style = document.createElement('style');
-            style.textContent = `
-                * { box-sizing: border-box; }
-                body { background: #FAFAFA !important; margin: 0 !important; padding: 0 !important; }
-                #smart-reader-container {
-                    max-width: 720px !important;
-                    margin: 0 auto !important;
-                    padding: 24px 20px 48px !important;
-                    font-family: 'Georgia', serif !important;
-                    font-size: 19px !important;
-                    line-height: 1.9 !important;
-                    color: #2C2C2C !important;
-                    background: #FAFAFA !important;
-                }
-                #smart-reader-container h1,h2,h3,h4 {
-                    font-family: sans-serif !important;
-                    color: #1A1A1A !important;
-                    margin-top: 1.5em !important;
-                }
-                #smart-reader-container h1 { font-size: 28px !important; }
-                #smart-reader-container h2 { font-size: 23px !important; }
-                #smart-reader-container h3 { font-size: 19px !important; }
-                #smart-reader-container p { margin-bottom: 1.2em !important; }
-                #smart-reader-container img {
-                    max-width: 100% !important; height: auto !important;
-                    border-radius: 8px !important; margin: 16px 0 !important; display: block !important;
-                }
-                #smart-reader-container a { color: #1565C0 !important; text-decoration: underline !important; }
-                #smart-reader-container blockquote {
-                    border-right: 4px solid #1565C0 !important; border-left: none !important;
-                    padding: 8px 16px !important; margin: 16px 0 !important;
-                    background: #F0F4FF !important; border-radius: 0 8px 8px 0 !important;
-                }
-                #smart-reader-container ul, #smart-reader-container ol {
-                    padding-right: 24px !important; padding-left: 0 !important;
-                }
-                #smart-reader-container li { margin-bottom: 8px !important; }
-            `;
+            style.textContent = [
+                '* { box-sizing: border-box; }',
+                'body { background: #FAFAFA !important; margin: 0 !important; padding: 0 !important; }',
+                '#smart-reader-container {',
+                '    max-width: 720px !important; margin: 0 auto !important;',
+                '    padding: 24px 20px 48px !important;',
+                '    font-family: Georgia, serif !important;',
+                '    font-size: 19px !important; line-height: 1.9 !important;',
+                '    color: #2C2C2C !important; background: #FAFAFA !important;',
+                '}',
+                '#smart-reader-container h1 { font-size: 28px !important; }',
+                '#smart-reader-container h2 { font-size: 23px !important; }',
+                '#smart-reader-container h3 { font-size: 19px !important; }',
+                '#smart-reader-container p { margin-bottom: 1.2em !important; }',
+                '#smart-reader-container img {',
+                '    max-width: 100% !important; height: auto !important;',
+                '    border-radius: 8px !important; margin: 16px 0 !important;',
+                '    display: block !important;',
+                '}',
+                '#smart-reader-container a { color: #1565C0 !important; }',
+                '#smart-reader-container ul, #smart-reader-container ol {',
+                '    padding-right: 24px !important; padding-left: 0 !important;',
+                '}',
+                '#smart-reader-container li { margin-bottom: 8px !important; }'
+            ].join('');
             document.head.appendChild(style);
             document.documentElement.setAttribute('dir', 'auto');
 
@@ -825,7 +873,9 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
 
             removeSelectors.forEach(function(s) {
                 try {
-                    document.querySelectorAll(s).forEach(function(el) { el.remove(); });
+                    document.querySelectorAll(s).forEach(function(el) {
+                        el.remove();
+                    });
                 } catch(e) {}
             });
 
@@ -840,45 +890,40 @@ ${if (currentPageContent.isNotBlank()) "- المحتوى:\n${currentPageContent.
 
             var readerContainer = document.createElement('div');
             readerContainer.id = 'reader-mode-container';
-            readerContainer.innerHTML = mainContent ? mainContent.innerHTML : document.body.innerHTML;
+            readerContainer.innerHTML = mainContent
+                ? mainContent.innerHTML
+                : document.body.innerHTML;
 
             document.body.innerHTML = '';
             document.body.appendChild(readerContainer);
 
             var style = document.createElement('style');
-            style.textContent = `
-                * { box-sizing: border-box; }
-                body { background: #FAFAFA !important; margin: 0 !important; padding: 0 !important; }
-                #reader-mode-container {
-                    max-width: 720px !important;
-                    margin: 0 auto !important;
-                    padding: 24px 20px 48px !important;
-                    font-family: 'Georgia', serif !important;
-                    font-size: 19px !important;
-                    line-height: 1.9 !important;
-                    color: #2C2C2C !important;
-                    background: #FAFAFA !important;
-                }
-                #reader-mode-container h1 { font-size: 28px !important; }
-                #reader-mode-container h2 { font-size: 23px !important; }
-                #reader-mode-container h3 { font-size: 19px !important; }
-                #reader-mode-container p {
-                    margin-bottom: 1.2em !important;
-                    text-align: justify !important;
-                }
-                #reader-mode-container img {
-                    max-width: 100% !important; height: auto !important;
-                    border-radius: 8px !important; margin: 16px 0 !important; display: block !important;
-                }
-                #reader-mode-container a { color: #1565C0 !important; }
-                #reader-mode-container blockquote {
-                    border-right: 4px solid #1565C0 !important; border-left: none !important;
-                    padding: 8px 16px !important; background: #F0F4FF !important;
-                }
-                #reader-mode-container ul, #reader-mode-container ol {
-                    padding-right: 24px !important; padding-left: 0 !important;
-                }
-            `;
+            style.textContent = [
+                '* { box-sizing: border-box; }',
+                'body { background: #FAFAFA !important; margin: 0 !important; padding: 0 !important; }',
+                '#reader-mode-container {',
+                '    max-width: 720px !important; margin: 0 auto !important;',
+                '    padding: 24px 20px 48px !important;',
+                '    font-family: Georgia, serif !important;',
+                '    font-size: 19px !important; line-height: 1.9 !important;',
+                '    color: #2C2C2C !important; background: #FAFAFA !important;',
+                '}',
+                '#reader-mode-container h1 { font-size: 28px !important; }',
+                '#reader-mode-container h2 { font-size: 23px !important; }',
+                '#reader-mode-container h3 { font-size: 19px !important; }',
+                '#reader-mode-container p {',
+                '    margin-bottom: 1.2em !important; text-align: justify !important;',
+                '}',
+                '#reader-mode-container img {',
+                '    max-width: 100% !important; height: auto !important;',
+                '    border-radius: 8px !important; margin: 16px 0 !important;',
+                '    display: block !important;',
+                '}',
+                '#reader-mode-container a { color: #1565C0 !important; }',
+                '#reader-mode-container ul, #reader-mode-container ol {',
+                '    padding-right: 24px !important; padding-left: 0 !important;',
+                '}'
+            ].join('');
             document.head.appendChild(style);
             document.documentElement.setAttribute('dir', 'auto');
 
