@@ -10,87 +10,68 @@ import javax.inject.Singleton
 
 @Singleton
 class WebPageTranslator @Inject constructor() {
-
-    fun buildExtractScript(): String {
-        return """
-        (function() {
-            const elements = document.querySelectorAll(
-                'h1,h2,h3,h4,h5,h6,p,li,span,a,td,th,button,label,option,blockquote,figcaption,summary'
+        fun buildExtractScript(): String {
+    return """
+    (function() {
+        try {
+            var walker = document.createTreeWalker(
+                document.body,
+                NodeFilter.SHOW_TEXT,
+                null,
+                false
             );
 
-            const result = [];
-            let nodeIndex = 0;
+            var result = [];
+            var nodeIndex = 0;
+            var seen = new Set();
 
-            elements.forEach(function(element) {
+            while (walker.nextNode()) {
+                var node = walker.currentNode;
+                var text = node.textContent
+                    .replace(/\s+/g, ' ')
+                    .trim();
 
-                const tag = element.tagName.toLowerCase();
+                if (text.length < 3) continue;
+                if (seen.has(text)) continue;
 
+                var parent = node.parentElement;
+                if (!parent) continue;
+
+                var tag = parent.tagName.toLowerCase();
                 if (
                     tag === 'script' ||
                     tag === 'style' ||
                     tag === 'noscript' ||
-                    tag === 'template' ||
-                    tag === 'svg' ||
-                    tag === 'canvas' ||
-                    tag === 'input' ||
-                    tag === 'textarea'
-                ) {
-                    return;
-                }
+                    tag === 'textarea' ||
+                    tag === 'input'
+                ) continue;
 
-                const style = window.getComputedStyle(element);
+                if (parent.hasAttribute('data-ai-translate-id')) continue;
 
+                var style = window.getComputedStyle(parent);
                 if (
                     style.display === 'none' ||
-                    style.visibility === 'hidden' ||
-                    style.opacity === '0' ||
-                    element.offsetParent === null
-                ) {
-                    return;
-                }
+                    style.visibility === 'hidden'
+                ) continue;
 
-                if (
-                    element.children.length > 0 &&
-                    !(
-                        element.children.length === 1 &&
-                        element.children[0].tagName === 'BR'
-                    )
-                ) {
-                    return;
-                }
+                seen.add(text);
+                var id = 'ai_node_' + nodeIndex++;
+                parent.setAttribute('data-ai-translate-id', id);
 
-                if (element.hasAttribute('data-ai-translate-id')) {
-                    return;
-                }
+                result.push({ id: id, text: text });
 
-                const text = element.innerText
-                    .replace(/\s+/g, ' ')
-                    .trim();
-
-                if (text.length <= 1) {
-                    return;
-                }
-
-                const nodeId = 'ai_node_' + nodeIndex;
-
-                element.setAttribute(
-                    'data-ai-translate-id',
-                    nodeId
-                );
-
-                result.push({
-                    id: nodeId,
-                    text: text
-                });
-
-                nodeIndex++;
-            });
+                if (result.length >= 200) break;
+            }
 
             return JSON.stringify(result);
-        })();
-        """.trimIndent()
-    }
-
+        } catch(e) {
+            return JSON.stringify([]);
+        }
+    })();
+    """.trimIndent()
+        }
+    
+                        
     fun buildReplaceScript(
         translations: List<TranslatedNode>
     ): String {
