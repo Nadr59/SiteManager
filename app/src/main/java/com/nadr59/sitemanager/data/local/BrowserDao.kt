@@ -1,7 +1,7 @@
 package com.nadr59.sitemanager.data.local
 
+import androidx.annotation.WorkerThread
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -47,6 +47,11 @@ interface BrowserDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTranslationCache(cache: TranslationCache)
 
+    // ═══ نسخة Sync لاستخدامها من سياق غير coroutine ═══
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @WorkerThread
+    fun insertTranslationCacheSync(cache: TranslationCache)
+
     @Query(
         "SELECT * FROM translation_cache " +
         "WHERE originalText = :text AND targetLanguage = :lang LIMIT 1"
@@ -75,10 +80,7 @@ interface BrowserDao {
     @Query("SELECT COUNT(*) FROM page_notes WHERE url = :url")
     suspend fun getNoteCountForUrl(url: String): Int
 
-    // ═══════════════════════════════════════
-    // الصفحات المحفوظة للقراءة لاحقاً
-    // ═══════════════════════════════════════
-
+    // ═══ الصفحات المحفوظة ═══
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSavedPage(page: SavedPage)
 
