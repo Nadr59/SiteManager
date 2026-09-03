@@ -47,15 +47,14 @@ interface BrowserDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTranslationCache(cache: TranslationCache)
 
-    @Query("SELECT * FROM translation_cache WHERE originalText = :text AND targetLanguage = :lang LIMIT 1")
+    @Query(
+        "SELECT * FROM translation_cache " +
+        "WHERE originalText = :text AND targetLanguage = :lang LIMIT 1"
+    )
     suspend fun getCachedTranslation(text: String, lang: String): TranslationCache?
 
     @Query("DELETE FROM translation_cache WHERE cachedAt < :before")
     suspend fun clearOldCache(before: Long)
-    
-    // أضف هذه الدالة - نسخة Sync بدون suspend
-@Insert(onConflict = OnConflictStrategy.REPLACE)
-fun insertTranslationCacheSync(cache: TranslationCache)
 
     // ═══ ملاحظات الصفحة ═══
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -75,4 +74,26 @@ fun insertTranslationCacheSync(cache: TranslationCache)
 
     @Query("SELECT COUNT(*) FROM page_notes WHERE url = :url")
     suspend fun getNoteCountForUrl(url: String): Int
+
+    // ═══════════════════════════════════════
+    // الصفحات المحفوظة للقراءة لاحقاً
+    // ═══════════════════════════════════════
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSavedPage(page: SavedPage)
+
+    @Query("SELECT * FROM saved_pages ORDER BY savedAt DESC")
+    fun getAllSavedPages(): Flow<List<SavedPage>>
+
+    @Query("SELECT * FROM saved_pages WHERE url = :url LIMIT 1")
+    suspend fun getSavedPageByUrl(url: String): SavedPage?
+
+    @Query("SELECT COUNT(*) FROM saved_pages WHERE url = :url")
+    suspend fun isPageSaved(url: String): Int
+
+    @Query("DELETE FROM saved_pages WHERE id = :id")
+    suspend fun deleteSavedPage(id: Int)
+
+    @Query("SELECT COUNT(*) FROM saved_pages")
+    suspend fun getSavedPagesCount(): Int
 }
