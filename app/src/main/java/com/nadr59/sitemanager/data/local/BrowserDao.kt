@@ -52,6 +52,10 @@ interface BrowserDao {
 
     @Query("DELETE FROM translation_cache WHERE cachedAt < :before")
     suspend fun clearOldCache(before: Long)
+    
+    // أضف هذه الدالة - نسخة Sync بدون suspend
+@Insert(onConflict = OnConflictStrategy.REPLACE)
+fun insertTranslationCacheSync(cache: TranslationCache)
 
     // ═══ ملاحظات الصفحة ═══
     @Insert(onConflict = OnConflictStrategy.REPLACE)
