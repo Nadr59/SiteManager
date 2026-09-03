@@ -15,131 +15,159 @@ class TranslationRepository @Inject constructor(
     private val browserDao: BrowserDao
 ) {
 
-    // ═══ ترجمة نص مع ذاكرة مؤقتة ═══
     suspend fun translateText(
         text: String,
         targetLanguage: String
     ): Result<String> {
         if (text.isBlank()) return Result.success("")
 
-        // ═══ البحث في الذاكرة المؤقتة ═══
-        val cached = browserDao.getCachedTranslation(text, targetLanguage)
+        val cached = browserDao.getCachedTranslation(
+            text, targetLanguage
+        )
         if (cached != null) {
             return Result.success(cached.translatedText)
         }
 
-        // ═══ الترجمة الفعلية ═══
         val result = translationEngine.translate(
             text = text,
             sourceLanguage = "auto",
             targetLanguage = targetLanguage
         )
 
-        // ═══ حفظ في الذاكرة المؤقتة ═══
         result.onSuccess { translated ->
-            browserDao.insertTranslationCache(
-                TranslationCache(
-                    id = generateHash(text + targetLanguage),
-                    originalText = text,
-                    translatedText = translated,
-                    targetLanguage = targetLanguage
-                )
-            )
+            saveCache(text, translated, targetLanguage)
         }
 
         return result
     }
 
-    // ═══ ترجمة عقد الصفحة مع ذاكرة مؤقتة ═══
     suspend fun translatePageNodes(
         nodes: List<PageTextNode>,
         targetLanguage: String,
         onProgress: (Float) -> Unit = {}
     ): Result<List<TranslatedNode>> {
-        try {
-            val total = nodes.size
-            val results = mutableListOf<TranslatedNode>()
-            var completed = 0
+        return try {
+            if (nodes.isEmpty()) {
+                return Result.success(emptyList())
+            }
 
-            // ═══ تنظيف الذاكرة القديمة (أكثر من 7 أيام) ═══
-            val weekAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000)
+            // ═══ تنظيف الكاش القديم ═══
+            val weekAgo = System.currentTimeMillis() -
+                    (7 * 24 * 60 * 60 * 1000L)
             browserDao.clearOldCache(weekAgo)
 
-            val batches = nodes.chunked(10)
+            onProgress(0.05f)
 
-            for (batch in batches) {
-                val cachedResults = mutableMapOf<Int, String>()
-                val uncachedIndices = mutableListOf<Int>()
+            // ═══ فصل المخزن عن غير المخزن ═══
+            val cachedMap = mutableMapOf<String, String>()
+            val uncachedNodes = mutableListOf<PageTextNode>()
 
-                // ═══ فحص الذاكرة المؤقتة لكل عقدة ═══
-                batch.forEachIndexed { index, node ->
-                    val cached = browserDao.getCachedTranslation(node.text, targetLanguage)
-                    if (cached != null) {
-                        cachedResults[index] = cached.translatedText
-                    } else {
-                        uncachedIndices.add(index)
-                    }
+            for (node in nodes) {
+                val cached = browserDao.getCachedTranslation(
+                    node.text, targetLanguage
+                )
+                if (cached != null) {
+                    cachedMap[node.id] = cached.translatedText
+                } else {
+                    uncachedNodes.add(node)
                 }
+            }
 
-                // ═══ ترجمة العقد غير المخزنة ═══
-                if (uncachedIndices.isNotEmpty()) {
-                    val uncachedTexts = uncachedIndices.map { batch[it].text }
-                    val translated = translationEngine.translateBatch(
-                        texts = uncachedTexts,
+            onProgress(0.1f)
+
+            // ═══ ترجمة الدفعات الكبيرة (50 نص/دفعة) ═══
+            val translatedMap = mutableMapOf<String, String>()
+            translatedMap.putAll(cachedMap)
+
+            if (uncachedNodes.isNotEmpty()) {
+                // دفعات أكبر = أسرع
+                val batchSize = 50
+                val batches = uncachedNodes.chunked(batchSize)
+                val totalBatches = batches.size
+
+                batches.forEachIndexed { batchIndex, batch ->
+                    val texts = batch.map { it.text }
+
+                    val result = translationEngine.translateBatch(
+                        texts = texts,
                         sourceLanguage = "auto",
                         targetLanguage = targetLanguage
                     )
 
-                    translated.fold(
+                    result.fold(
                         onSuccess = { translations ->
-                            uncachedIndices.forEachIndexed { i, batchIndex ->
-                                val translatedText = translations.getOrElse(i) { batch[batchIndex].text }
-                                cachedResults[batchIndex] = translatedText
+                            batch.forEachIndexed { i, node ->
+                                val translated = translations
+                                    .getOrElse(i) { node.text }
+                                translatedMap[node.id] = translated
 
-                                // ═══ حفظ في الذاكرة المؤقتة ═══
-                                if (translatedText != batch[batchIndex].text) {
-                                    browserDao.insertTranslationCache(
-                                        TranslationCache(
-                                            id = generateHash(batch[batchIndex].text + targetLanguage),
-                                            originalText = batch[batchIndex].text,
-                                            translatedText = translatedText,
-                                            targetLanguage = targetLanguage
-                                        )
+                                // حفظ في الكاش
+                                if (translated != node.text) {
+                                    saveCache(
+                                        node.text,
+                                        translated,
+                                        targetLanguage
                                     )
                                 }
                             }
                         },
                         onFailure = {
-                            uncachedIndices.forEach { batchIndex ->
-                                cachedResults[batchIndex] = batch[batchIndex].text
+                            // احتفظ بالنص الأصلي عند الفشل
+                            batch.forEach { node ->
+                                translatedMap[node.id] = node.text
                             }
                         }
                     )
-                }
 
-                // ═══ بناء النتائج بالترتيب ═══
-                batch.forEachIndexed { index, node ->
-                    results.add(
-                        TranslatedNode(
-                            id = node.id,
-                            originalText = node.text,
-                            translatedText = cachedResults[index] ?: node.text
-                        )
-                    )
+                    // تحديث التقدم
+                    val progress = 0.1f + (0.9f *
+                            (batchIndex + 1).toFloat() /
+                            totalBatches)
+                    onProgress(progress.coerceIn(0f, 1f))
                 }
-
-                completed += batch.size
-                onProgress(completed.toFloat() / total)
+            } else {
+                onProgress(1f)
             }
 
-            return Result.success(results)
+            // ═══ بناء النتائج ═══
+            val results = nodes.map { node ->
+                TranslatedNode(
+                    id = node.id,
+                    originalText = node.text,
+                    translatedText = translatedMap[node.id]
+                        ?: node.text
+                )
+            }
+
+            Result.success(results)
+
         } catch (e: Exception) {
-            return Result.failure(e)
+            Result.failure(e)
         }
     }
 
+    private fun saveCache(
+        original: String,
+        translated: String,
+        targetLanguage: String
+    ) {
+        try {
+            val hash = generateHash(original + targetLanguage)
+            browserDao.insertTranslationCacheSync(
+                TranslationCache(
+                    id = hash,
+                    originalText = original,
+                    translatedText = translated,
+                    targetLanguage = targetLanguage
+                )
+            )
+        } catch (_: Exception) {}
+    }
+
     private fun generateHash(input: String): String {
-        val bytes = MessageDigest.getInstance("MD5").digest(input.toByteArray())
+        val bytes = MessageDigest
+            .getInstance("MD5")
+            .digest(input.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
     }
 }
