@@ -95,6 +95,8 @@ import com.nadr59.sitemanager.data.local.PageNote
 import com.nadr59.sitemanager.viewmodel.AiMessage
 import com.nadr59.sitemanager.viewmodel.BrowserViewModel
 import kotlinx.coroutines.delay
+import com.nadr59.sitemanager.data.local.SavedPage
+import com.nadr59.sitemanager.data.model.SmartReadStep
 
 // ═══════════════════════════════════════════════════════════
 // الشاشة الرئيسية
@@ -131,25 +133,46 @@ fun BrowserScreen(
     var showAiChat by remember { mutableStateOf(false) }
     var showNotesSheet by remember { mutableStateOf(false) }
     var showScreenshot by remember { mutableStateOf(false) }
+    var showSavedPages by remember { mutableStateOf(false) }
+    val savedPages by viewModel.savedPages.collectAsState(initial = emptyList())
 
     LaunchedEffect(siteId) {
         if (siteId > 0) viewModel.loadSite(siteId)
     }
 
     // ═══ تنفيذ JavaScript ═══
-    LaunchedEffect(pendingJs) {
-        val script = pendingJs ?: return@LaunchedEffect
-        val wv = webView ?: return@LaunchedEffect
-        delay(100)
-        wv.post {
-            wv.evaluateJavascript(script) { result ->
-                viewModel.onJsExecuted()
-                if (result != null && result != "null") {
-                    viewModel.onJavascriptResult(result)
+    // ═══ تنفيذ JavaScript ═══
+LaunchedEffect(pendingJs) {
+    val script = pendingJs
+    if (script != null && webView != null) {
+        webView?.evaluateJavascript(script) { result ->
+            viewModel.onJsExecuted()
+            if (result != null && result != "null" && result.isNotBlank()) {
+                val cleanResult = result
+                    .removePrefix("\"")
+                    .removeSuffix("\"")
+                    .replace("\\\"", "\"")
+                    .replace("\\\\", "\\")
+                    .replace("\\n", "\n")
+
+                when {
+                    // ═══ SmartRead: Reader Mode اكتمل ═══
+                    cleanResult.trim() == "smart_reader_ready" -> {
+                        viewModel.onReaderModeApplied()
+                    }
+                    // ═══ عقد مستخرجة (JSON Array) ═══
+                    cleanResult.trimStart().startsWith("[") -> {
+                        viewModel.onNodesExtracted(result)
+                    }
+                    // ═══ نص محدد ═══
+                    cleanResult.contains("\"text\"") -> {
+                        viewModel.onTextSelected(result)
+                    }
                 }
             }
         }
     }
+}
 
     // ═══ مراقبة المحتوى الديناميكي ═══
     LaunchedEffect(uiState.isTranslationMode) {
